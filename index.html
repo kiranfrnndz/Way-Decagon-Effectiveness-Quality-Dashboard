@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" >
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -87,10 +87,10 @@
     <div id="csvPanel">
       <div class="drop-zone" id="dropZone">
         <div class="drop-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
-        <div class="drop-title">Drop your CSV file here</div>
+        <div class="drop-title">Drop your XLSX or CSV file here</div>
         <div class="drop-sub">or <label class="drop-link" for="fileInput">browse files</label></div>
-        <div class="drop-format">CS_All_Tickets export · UTF-8 CSV</div>
-        <input type="file" id="fileInput" accept=".csv" style="display:none">
+        <div class="drop-format">CS_All_Tickets export · XLSX or CSV</div>
+        <input type="file" id="fileInput" accept=".csv,.xlsx,.xls,.xlsm" style="display:none">
       </div>
 
       <div class="file-status" id="fileStatus" style="display:none">
@@ -121,6 +121,8 @@
         <div class="progress-label" id="progressLabel">Processing…</div>
       </div>
     </div>
+
+    <div class="format-note"><i class="fa-solid fa-circle-info"></i> Accepts <strong>Excel (.xlsx)</strong> and <strong>CSV</strong> — CS_All_Tickets export from your CRM</div>
 
     <!-- SAMPLE DATA BUTTON -->
     <div class="sample-data-row">
@@ -521,6 +523,7 @@
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

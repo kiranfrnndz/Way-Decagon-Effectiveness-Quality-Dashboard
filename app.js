@@ -1,225 +1,69 @@
 /* ===================================================
-   WAY-DECAGON DASHBOARD — APP.JS
-   Version: 2.0.0 | Production Ready
+   WAY-DECAGON DASHBOARD — APP.JS v3.0
+   Supports: CSV + XLSX | White Theme
+   Real column mapping for CS_All_Tickets export
 =================================================== */
-
 'use strict';
 
-// ══════════════════════════════════════════════════
-// CONFIGURATION
-// ══════════════════════════════════════════════════
 const CONFIG = {
   AI_INTERACTION_TYPE: 'AI-Agent Call',
-  INTERNAL_TYPES: ['TL Review','Supervisor Review','Manager Review','Internal Notes','Internal Follow Up','Vendor Follow Up','Quality Review','QC Audit','Internal'],
-  CUSTOMER_FACING: ['AI-Agent Call','Call','Email','Chat','SMS','Chat Message','Inbound Call','Outbound Call'],
-  COMPLIANCE_FIELDS: ['Reason','Sub Reason','Action Taken'],
+  INTERNAL_TYPES: ['TL Review','Manager Review','QC Audit','Select','User Reviews','BBB Reviews','App Feedback','Escalation Handled by TL','Escalation handled by Escalation Team','Escalation handled by Manager','Escalation handled by Ops Team'],
+  CUSTOMER_FACING: ['AI-Agent Call','Call','Email','Chat','SMS'],
   DEFECT_THRESHOLD_SEC: 60,
-  REQUIRED_COLUMNS: ['Ticket ID','Interaction ID','Interaction Type','Created Date'],
-  DATE_FORMAT: 'Created Date',
-  GOOGLE_SHEETS_ENABLED: false,
-  VERSION: '2.0.0'
+  VERSION: '3.0.0'
 };
 
-// Column aliases — maps various CSV header names to canonical names
-const COLUMN_ALIASES = {
-  'ticket id':       'Ticket ID',
-  'ticket_id':       'Ticket ID',
-  'ticketid':        'Ticket ID',
-  'ogi':             'OGI',
-  'order group id':  'OGI',
-  'interaction id':  'Interaction ID',
-  'interaction_id':  'Interaction ID',
-  'interaction type':'Interaction Type',
-  'channel':         'Interaction Type',
-  'type':            'Interaction Type',
-  'created date':    'Created Date',
-  'created_date':    'Created Date',
-  'date':            'Created Date',
-  'created at':      'Created Date',
-  'reason':          'Reason',
-  'sub reason':      'Sub Reason',
-  'sub_reason':      'Sub Reason',
-  'subreason':       'Sub Reason',
-  'action taken':    'Action Taken',
-  'action_taken':    'Action Taken',
-  'resolution':      'Action Taken',
-  'status':          'Status',
-  'assignee':        'Assignee'
+// Map actual CSV/XLSX column names → canonical names used in logic
+const COL = {
+  TICKET_ID:    ['Ticket ID','ticket_id','ticketid','TicketID'],
+  OGI:          ['OGI','ogi','Order Group ID'],
+  INTERACTION:  ['Interaction','Interaction Type','interaction_type','channel'],
+  INT_DATE:     ['Interaction date','Interaction Date','Created Date','created_date','Date'],
+  INT_ID:       ['Interaction ID','interaction_id','InteractionID'],
+  REASON:       ['TKT_IssueReason','Reason','reason','Issue Reason'],
+  SUB_REASON:   ['Sub Reason','sub_reason','SubReason'],
+  ACTION:       ['Action','Action Taken','action_taken','Resolution'],
+  STATUS:       ['Status','status'],
+  AGENT:        ['Agent Name','agent_name','Assignee'],
+  VERTICAL:     ['Vertical','vertical'],
+  SUB_VERTICAL: ['SubVertical','Sub Vertical']
 };
 
-// ══════════════════════════════════════════════════
-// STATE
-// ══════════════════════════════════════════════════
+function findCol(headers, candidates) {
+  for (const c of candidates) {
+    const found = headers.find(h => h && h.trim().toLowerCase() === c.toLowerCase());
+    if (found) return found;
+  }
+  return null;
+}
+
 const STATE = {
-  rawRows: [],
-  normalizedRows: [],
-  ticketMap: new Map(),
-  filteredTickets: new Map(),
-  charts: {},
-  datatables: {},
-  validationPassed: false,
-  filterActive: false,
-  currentTheme: 'dark'
+  rawRows: [], ticketMap: new Map(), filteredTickets: new Map(),
+  charts: {}, datatables: {}, validationPassed: false,
+  colMap: {}
 };
 
-// ══════════════════════════════════════════════════
-// UTILITY FUNCTIONS
-// ══════════════════════════════════════════════════
+// ── UTILS ──
 const fmt = {
   num: n => n == null ? '—' : Number(n).toLocaleString(),
   pct: n => n == null ? '—' : Number(n).toFixed(1) + '%',
-  date: d => {
-    if (!d) return '—';
-    const dt = new Date(d);
-    return isNaN(dt) ? String(d) : dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-  },
-  time: d => {
-    if (!d) return '—';
-    const dt = new Date(d);
-    return isNaN(dt) ? String(d) : dt.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  },
-  datetime: d => {
-    if (!d) return '—';
-    const dt = new Date(d);
-    return isNaN(dt) ? String(d) : dt.toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
-  }
+  date: d => { if (!d) return '—'; const dt = new Date(d); return isNaN(dt) ? String(d) : dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); },
+  datetime: d => { if (!d) return '—'; const dt = new Date(d); return isNaN(dt) ? String(d) : dt.toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
 };
 
 function showToast(msg, type='info', duration=4000) {
   const tc = document.getElementById('toastContainer');
   const t = document.createElement('div');
-  const icons = {success:'fa-circle-check', error:'fa-circle-xmark', info:'fa-circle-info'};
+  const icons = {success:'fa-circle-check',error:'fa-circle-xmark',info:'fa-circle-info'};
   t.className = `toast toast-${type}`;
   t.innerHTML = `<i class="fa-solid ${icons[type]||icons.info}"></i>${msg}`;
   tc.appendChild(t);
   setTimeout(() => { t.style.animation='fadeOut 0.3s ease forwards'; setTimeout(()=>t.remove(),300); }, duration);
 }
 
-function unlockSection(id) {
-  document.getElementById(id)?.classList.add('unlocked');
-}
-
-function pct(num, den) { return den > 0 ? (num / den * 100) : 0; }
-
-function badge(text, color='muted') {
-  return `<span class="badge badge-${color}">${text}</span>`;
-}
-
-function colorPct(p) {
-  if (p >= 80) return 'badge-green';
-  if (p >= 60) return 'badge-amber';
-  return 'badge-red';
-}
-
-// ══════════════════════════════════════════════════
-// COLUMN NORMALIZATION
-// ══════════════════════════════════════════════════
-function normalizeColumns(rows) {
-  if (!rows.length) return rows;
-  const headers = Object.keys(rows[0]);
-  const mapping = {};
-  headers.forEach(h => {
-    const lower = h.trim().toLowerCase();
-    if (COLUMN_ALIASES[lower]) mapping[h] = COLUMN_ALIASES[lower];
-    else mapping[h] = h.trim(); // keep original if no alias
-  });
-  return rows.map(row => {
-    const norm = {};
-    Object.entries(row).forEach(([k, v]) => {
-      norm[mapping[k] || k] = v;
-    });
-    return norm;
-  });
-}
-
-// ══════════════════════════════════════════════════
-// VALIDATION
-// ══════════════════════════════════════════════════
-function validateData(rows) {
-  if (!rows.length) return { passed: false, checks: {}, counts: {} };
-  const cols = Object.keys(rows[0]);
-
-  const checks = {
-    cols: CONFIG.REQUIRED_COLUMNS.some(c => cols.includes(c)),
-    ticket: rows.some(r => r['Ticket ID'] && String(r['Ticket ID']).trim()),
-    ogi: rows.some(r => r['OGI'] && String(r['OGI']).trim()),
-    types: rows.some(r => r['Interaction Type'] && String(r['Interaction Type']).trim()),
-    compliance: CONFIG.COMPLIANCE_FIELDS.some(f => cols.includes(f))
-  };
-
-  const counts = {
-    records: rows.length,
-    uniqueOGI: new Set(rows.map(r => r['OGI']).filter(Boolean)).size,
-    uniqueTickets: new Set(rows.map(r => r['Ticket ID']).filter(Boolean)).size,
-    totalInteractions: rows.length,
-    aiInteractions: rows.filter(r => String(r['Interaction Type']||'').trim() === CONFIG.AI_INTERACTION_TYPE).length,
-    humanInteractions: rows.filter(r => {
-      const t = String(r['Interaction Type']||'').trim();
-      return CONFIG.CUSTOMER_FACING.includes(t) && t !== CONFIG.AI_INTERACTION_TYPE;
-    }).length,
-    internalInteractions: rows.filter(r => CONFIG.INTERNAL_TYPES.includes(String(r['Interaction Type']||'').trim())).length
-  };
-
-  const passed = checks.cols && checks.ticket && checks.types;
-  return { passed, checks, counts };
-}
-
-// ══════════════════════════════════════════════════
-// TICKET MAP BUILDER
-// ══════════════════════════════════════════════════
-function buildTicketMap(rows) {
-  const map = new Map();
-
-  rows.forEach(row => {
-    const ticketId = String(row['Ticket ID'] || '').trim();
-    if (!ticketId) return;
-
-    if (!map.has(ticketId)) {
-      map.set(ticketId, {
-        ticketId,
-        ogi: String(row['OGI'] || '').trim() || 'UNKNOWN',
-        createdDate: row['Created Date'] || '',
-        reason: String(row['Reason'] || '').trim(),
-        subReason: String(row['Sub Reason'] || '').trim(),
-        actionTaken: String(row['Action Taken'] || '').trim(),
-        interactions: [],
-        status: String(row['Status'] || '').trim(),
-        assignee: String(row['Assignee'] || '').trim()
-      });
-    }
-
-    const ticket = map.get(ticketId);
-    ticket.interactions.push({
-      interactionId: String(row['Interaction ID'] || '').trim(),
-      type: String(row['Interaction Type'] || '').trim(),
-      createdDate: row['Created Date'] || '',
-      parsedDate: parseDate(row['Created Date']),
-      reason: String(row['Reason'] || '').trim(),
-      subReason: String(row['Sub Reason'] || '').trim(),
-      actionTaken: String(row['Action Taken'] || '').trim(),
-      raw: row
-    });
-
-    // Update ticket-level fields from latest interaction if blank
-    if (!ticket.reason && row['Reason']) ticket.reason = String(row['Reason']).trim();
-    if (!ticket.subReason && row['Sub Reason']) ticket.subReason = String(row['Sub Reason']).trim();
-    if (!ticket.actionTaken && row['Action Taken']) ticket.actionTaken = String(row['Action Taken']).trim();
-    if (!ticket.ogi || ticket.ogi === 'UNKNOWN') ticket.ogi = String(row['OGI'] || '').trim() || 'UNKNOWN';
-  });
-
-  // Sort interactions by date
-  map.forEach(ticket => {
-    ticket.interactions.sort((a, b) => (a.parsedDate||0) - (b.parsedDate||0));
-    // Use earliest interaction date as ticket created date
-    if (ticket.interactions.length && ticket.interactions[0].parsedDate) {
-      ticket.createdDate = ticket.interactions[0].createdDate;
-    }
-    // Derive all computed metrics
-    enrichTicket(ticket);
-  });
-
-  return map;
-}
+function unlockSection(id) { document.getElementById(id)?.classList.add('unlocked'); }
+function pct(num, den) { return den > 0 ? (num/den*100) : 0; }
+function badge(text, color='muted') { return `<span class="badge badge-${color}">${text}</span>`; }
 
 function parseDate(d) {
   if (!d) return null;
@@ -227,219 +71,248 @@ function parseDate(d) {
   return isNaN(dt) ? null : dt.getTime();
 }
 
+// ── COLUMN MAPPING ──
+function buildColMap(headers) {
+  const map = {};
+  map.ticketId   = findCol(headers, COL.TICKET_ID);
+  map.ogi        = findCol(headers, COL.OGI);
+  map.interaction= findCol(headers, COL.INTERACTION);
+  map.intDate    = findCol(headers, COL.INT_DATE);
+  map.intId      = findCol(headers, COL.INT_ID);
+  map.reason     = findCol(headers, COL.REASON);
+  map.subReason  = findCol(headers, COL.SUB_REASON);
+  map.action     = findCol(headers, COL.ACTION);
+  map.status     = findCol(headers, COL.STATUS);
+  map.agent      = findCol(headers, COL.AGENT);
+  map.vertical   = findCol(headers, COL.VERTICAL);
+  map.subVertical= findCol(headers, COL.SUB_VERTICAL);
+  return map;
+}
+
+function getVal(row, colName) {
+  if (!colName) return '';
+  return String(row[colName] || '').trim();
+}
+
+// ── XLSX READER ──
+async function readXLSX(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+        resolve(rows);
+      } catch(err) { reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// ── VALIDATION ──
+function validateData(rows) {
+  if (!rows.length) return { passed: false, checks: {}, counts: {} };
+  const headers = Object.keys(rows[0]);
+  const cm = buildColMap(headers);
+  STATE.colMap = cm;
+
+  const checks = {
+    cols:       !!cm.ticketId && !!cm.interaction,
+    ticket:     rows.some(r => getVal(r, cm.ticketId)),
+    ogi:        rows.some(r => getVal(r, cm.ogi)),
+    types:      rows.some(r => getVal(r, cm.interaction)),
+    compliance: !!cm.reason || !!cm.subReason || !!cm.action
+  };
+
+  const isAI = r => getVal(r, cm.interaction) === CONFIG.AI_INTERACTION_TYPE;
+  const isInternal = r => CONFIG.INTERNAL_TYPES.includes(getVal(r, cm.interaction));
+  const isHumanCustomer = r => {
+    const t = getVal(r, cm.interaction);
+    return CONFIG.CUSTOMER_FACING.includes(t) && t !== CONFIG.AI_INTERACTION_TYPE;
+  };
+
+  const counts = {
+    records: rows.length,
+    uniqueOGI: new Set(rows.map(r => getVal(r, cm.ogi)).filter(Boolean)).size,
+    uniqueTickets: new Set(rows.map(r => getVal(r, cm.ticketId)).filter(Boolean)).size,
+    totalInteractions: rows.length,
+    aiInteractions: rows.filter(isAI).length,
+    humanInteractions: rows.filter(isHumanCustomer).length,
+    internalInteractions: rows.filter(isInternal).length
+  };
+
+  return { passed: checks.cols && checks.ticket && checks.types, checks, counts };
+}
+
+// ── TICKET MAP ──
+function buildTicketMap(rows) {
+  const cm = STATE.colMap;
+  const map = new Map();
+
+  rows.forEach(row => {
+    const ticketId = getVal(row, cm.ticketId);
+    if (!ticketId) return;
+
+    if (!map.has(ticketId)) {
+      map.set(ticketId, {
+        ticketId,
+        ogi:        getVal(row, cm.ogi) || 'UNKNOWN',
+        createdDate:getVal(row, cm.intDate),
+        reason:     getVal(row, cm.reason),
+        subReason:  getVal(row, cm.subReason),
+        actionTaken:getVal(row, cm.action),
+        vertical:   getVal(row, cm.vertical),
+        subVertical:getVal(row, cm.subVertical),
+        status:     getVal(row, cm.status),
+        interactions: []
+      });
+    }
+
+    const ticket = map.get(ticketId);
+    const intType = getVal(row, cm.interaction);
+    const intDate = getVal(row, cm.intDate);
+
+    ticket.interactions.push({
+      interactionId: getVal(row, cm.intId),
+      type:          intType,
+      createdDate:   intDate,
+      parsedDate:    parseDate(intDate),
+      reason:        getVal(row, cm.reason),
+      subReason:     getVal(row, cm.subReason),
+      actionTaken:   getVal(row, cm.action),
+      agent:         getVal(row, cm.agent)
+    });
+
+    // Keep ticket-level fields from any non-empty row
+    if (!ticket.reason && getVal(row, cm.reason)) ticket.reason = getVal(row, cm.reason);
+    if (!ticket.subReason && getVal(row, cm.subReason)) ticket.subReason = getVal(row, cm.subReason);
+    if (!ticket.actionTaken && getVal(row, cm.action)) ticket.actionTaken = getVal(row, cm.action);
+    if (ticket.ogi === 'UNKNOWN' && getVal(row, cm.ogi)) ticket.ogi = getVal(row, cm.ogi);
+  });
+
+  map.forEach(ticket => {
+    ticket.interactions.sort((a,b) => (a.parsedDate||0) - (b.parsedDate||0));
+    if (ticket.interactions.length && ticket.interactions[0].parsedDate)
+      ticket.createdDate = ticket.interactions[0].createdDate;
+    enrichTicket(ticket);
+  });
+
+  return map;
+}
+
 function enrichTicket(ticket) {
   const ints = ticket.interactions;
-
-  // classify interactions
   const customerFacing = ints.filter(i => CONFIG.CUSTOMER_FACING.includes(i.type));
-  const internalInts = ints.filter(i => CONFIG.INTERNAL_TYPES.includes(i.type));
   const aiInts = ints.filter(i => i.type === CONFIG.AI_INTERACTION_TYPE);
-  const humanCustomerInts = customerFacing.filter(i => i.type !== CONFIG.AI_INTERACTION_TYPE);
+  const humanInts = customerFacing.filter(i => i.type !== CONFIG.AI_INTERACTION_TYPE);
 
   ticket.isAITicket = aiInts.length > 0;
   ticket.aiInteractionCount = aiInts.length;
-  ticket.humanInteractionCount = humanCustomerInts.length;
-  ticket.internalInteractionCount = internalInts.length;
+  ticket.humanInteractionCount = humanInts.length;
+  ticket.internalInteractionCount = ints.filter(i => CONFIG.INTERNAL_TYPES.includes(i.type)).length;
   ticket.customerFacingCount = customerFacing.length;
-
-  // FCR: only customer-facing count matters
   ticket.fcrAchieved = customerFacing.length <= 1;
 
-  // AI Containment: AI ticket with no human customer-facing after AI
   if (ticket.isAITicket) {
     const firstAI = aiInts[0];
-    const humanAfterAI = humanCustomerInts.filter(i => (i.parsedDate||0) > (firstAI.parsedDate||0));
+    const humanAfterAI = humanInts.filter(i => (i.parsedDate||0) > (firstAI.parsedDate||0));
     ticket.aiContained = humanAfterAI.length === 0;
     ticket.humanTouchAfterAI = humanAfterAI.length > 0;
-    ticket.escalated = humanAfterAI.some(i => ['Call','Inbound Call','Outbound Call'].includes(i.type));
+    ticket.escalated = humanAfterAI.some(i => ['Call'].includes(i.type));
   } else {
-    ticket.aiContained = false;
-    ticket.humanTouchAfterAI = false;
-    ticket.escalated = false;
+    ticket.aiContained = ticket.humanTouchAfterAI = ticket.escalated = false;
   }
 
-  // Compliance (only for AI tickets)
   if (ticket.isAITicket) {
-    ticket.missingReason = !ticket.reason;
+    ticket.missingReason    = !ticket.reason;
     ticket.missingSubReason = !ticket.subReason;
-    ticket.missingAction = !ticket.actionTaken;
+    ticket.missingAction    = !ticket.actionTaken;
     ticket.compliant = !ticket.missingReason && !ticket.missingSubReason && !ticket.missingAction;
   } else {
-    ticket.missingReason = false;
-    ticket.missingSubReason = false;
-    ticket.missingAction = false;
+    ticket.missingReason = ticket.missingSubReason = ticket.missingAction = false;
     ticket.compliant = true;
   }
 
-  // Defect detection
   ticket.hasDuplicateAI = aiInts.length > 1;
   ticket.duplicateAICount = Math.max(0, aiInts.length - 1);
 
-  // Same-timestamp defects
-  const aiTimestamps = aiInts.map(i => i.parsedDate).filter(Boolean);
   const tsSet = new Set();
   let sameTs = 0;
-  aiTimestamps.forEach(ts => { if (tsSet.has(ts)) sameTs++; else tsSet.add(ts); });
+  aiInts.forEach(i => { if (!i.parsedDate) return; if (tsSet.has(i.parsedDate)) sameTs++; else tsSet.add(i.parsedDate); });
   ticket.sameTimestampDefects = sameTs;
 
-  // Short interval defects (configurable threshold)
   let shortInterval = 0;
   for (let i = 1; i < aiInts.length; i++) {
-    const prev = aiInts[i-1].parsedDate || 0;
-    const curr = aiInts[i].parsedDate || 0;
-    if (curr > 0 && prev > 0 && (curr - prev) < CONFIG.DEFECT_THRESHOLD_SEC * 1000) {
-      shortInterval++;
-    }
+    const p = aiInts[i-1].parsedDate||0, c = aiInts[i].parsedDate||0;
+    if (c > 0 && p > 0 && (c - p) < CONFIG.DEFECT_THRESHOLD_SEC * 1000) shortInterval++;
   }
   ticket.shortIntervalDefects = shortInterval;
-  ticket.hasDefect = ticket.hasDuplicateAI || ticket.sameTimestampDefects > 0 || ticket.shortIntervalDefects > 0;
+  ticket.hasDefect = ticket.hasDuplicateAI || sameTs > 0 || shortInterval > 0;
 
-  // Escalation reason
-  ticket.escalationReason = ticket.escalated ? (ticket.reason || 'Unknown') : null;
-
-  // Week/date bucket
   if (ticket.createdDate) {
     const d = new Date(ticket.createdDate);
     if (!isNaN(d)) {
       ticket.dateBucket = d.toISOString().slice(0,10);
-      ticket.weekBucket = getWeekStart(d).toISOString().slice(0,10);
     }
   }
 }
 
-function getWeekStart(d) {
-  const dt = new Date(d);
-  const day = dt.getDay();
-  const diff = dt.getDate() - day + (day === 0 ? -6 : 1);
-  return new Date(dt.setDate(diff));
-}
-
-// ══════════════════════════════════════════════════
-// AGGREGATE METRICS
-// ══════════════════════════════════════════════════
 function computeMetrics(ticketMap) {
   const tickets = [...ticketMap.values()];
   const aiTickets = tickets.filter(t => t.isAITicket);
-
   return {
     totalTickets: tickets.length,
     aiTickets: aiTickets.length,
-    aiInteractions: tickets.reduce((s,t) => s + t.aiInteractionCount, 0),
-    fcrAchieved: aiTickets.filter(t => t.fcrAchieved).length,
-    fcrRate: pct(aiTickets.filter(t => t.fcrAchieved).length, aiTickets.length),
-    aiContained: aiTickets.filter(t => t.aiContained).length,
-    containmentRate: pct(aiTickets.filter(t => t.aiContained).length, aiTickets.length),
-    humanTouch: aiTickets.filter(t => t.humanTouchAfterAI).length,
-    humanTouchRate: pct(aiTickets.filter(t => t.humanTouchAfterAI).length, aiTickets.length),
-    escalated: aiTickets.filter(t => t.escalated).length,
-    escalationRate: pct(aiTickets.filter(t => t.escalated).length, aiTickets.length),
-    compliant: aiTickets.filter(t => t.compliant).length,
-    complianceRate: pct(aiTickets.filter(t => t.compliant).length, aiTickets.length),
-    missingReason: aiTickets.filter(t => t.missingReason).length,
-    missingSubReason: aiTickets.filter(t => t.missingSubReason).length,
-    missingAction: aiTickets.filter(t => t.missingAction).length,
-    duplicateAITickets: aiTickets.filter(t => t.hasDuplicateAI).length,
-    sameTimestampDefects: aiTickets.reduce((s,t) => s + t.sameTimestampDefects, 0),
-    shortIntervalDefects: aiTickets.reduce((s,t) => s + t.shortIntervalDefects, 0),
-    defectTickets: aiTickets.filter(t => t.hasDefect).length,
-    aiOnly: aiTickets.filter(t => t.aiContained && !t.humanTouchAfterAI).length,
-    humanAssisted: aiTickets.filter(t => t.humanTouchAfterAI && !t.escalated).length,
-    tickets,
-    aiTickets
+    aiInteractions: tickets.reduce((s,t)=>s+t.aiInteractionCount,0),
+    fcrAchieved: aiTickets.filter(t=>t.fcrAchieved).length,
+    fcrRate: pct(aiTickets.filter(t=>t.fcrAchieved).length, aiTickets.length),
+    aiContained: aiTickets.filter(t=>t.aiContained).length,
+    containmentRate: pct(aiTickets.filter(t=>t.aiContained).length, aiTickets.length),
+    humanTouch: aiTickets.filter(t=>t.humanTouchAfterAI).length,
+    humanTouchRate: pct(aiTickets.filter(t=>t.humanTouchAfterAI).length, aiTickets.length),
+    escalated: aiTickets.filter(t=>t.escalated).length,
+    escalationRate: pct(aiTickets.filter(t=>t.escalated).length, aiTickets.length),
+    compliant: aiTickets.filter(t=>t.compliant).length,
+    complianceRate: pct(aiTickets.filter(t=>t.compliant).length, aiTickets.length),
+    missingReason: aiTickets.filter(t=>t.missingReason).length,
+    missingSubReason: aiTickets.filter(t=>t.missingSubReason).length,
+    missingAction: aiTickets.filter(t=>t.missingAction).length,
+    duplicateAITickets: aiTickets.filter(t=>t.hasDuplicateAI).length,
+    sameTimestampDefects: aiTickets.reduce((s,t)=>s+t.sameTimestampDefects,0),
+    shortIntervalDefects: aiTickets.reduce((s,t)=>s+t.shortIntervalDefects,0),
+    aiOnly: aiTickets.filter(t=>t.aiContained && !t.humanTouchAfterAI).length,
+    humanAssisted: aiTickets.filter(t=>t.humanTouchAfterAI && !t.escalated).length,
+    tickets, aiTickets
   };
 }
 
-// ══════════════════════════════════════════════════
-// SAMPLE DATA GENERATOR
-// ══════════════════════════════════════════════════
+// ── SAMPLE DATA ──
 function generateSampleData(n=500) {
-  const reasons = ['Booking Modification','Parking Not Found','Payment Issue','Refund Request','Access Issue','General Inquiry','QR Code Problem','App Technical Issue','Lot Directions','Check-in Assistance'];
-  const subReasons = ['Change Date','Change Location','Payment Failed','Duplicate Charge','Gate Won't Open','App Crash','QR Expired','Lot Full','Wrong Address','Pricing Question'];
-  const actions = ['Modified Booking','Issued Refund','Escalated to Ops','Provided Directions','Reset QR Code','Collected Feedback','Transferred to Lot','Processed Cancellation','Sent Confirmation','Created Manual Pass'];
+  const subReasons = ['Lot Address Enquiry','Check-out Assistance','Shuttle boarding details','Payment Failed','Booking Modification','QR Code Problem','Lot Full','Refund Request','App Technical Issue','Access Issue'];
+  const actions = ['Details provided','Issued Refund','Modified Booking','Reset QR Code','Transferred to Lot','Call Transferred to Supervisor','Processed Cancellation','Opened','Closed'];
   const rows = [];
-
-  for (let i = 0; i < n; i++) {
-    const ticketNum = 100000 + Math.floor(Math.random() * 50000);
-    const ticketId = `TKT-${ticketNum}`;
-    const ogi = `OGI-${Math.floor(ticketNum/3)}`;
-    const baseDate = new Date('2026-05-01T00:00:00Z');
-    baseDate.setDate(baseDate.getDate() + Math.floor(Math.random() * 38));
-    baseDate.setHours(8 + Math.floor(Math.random() * 14), Math.floor(Math.random() * 60));
-    const reason = reasons[Math.floor(Math.random()*reasons.length)];
-    const subReason = subReasons[Math.floor(Math.random()*subReasons.length)];
-    const action = Math.random() > 0.12 ? actions[Math.floor(Math.random()*actions.length)] : '';
-
-    // AI interaction (always present)
-    const aiDate = new Date(baseDate);
-    rows.push({
-      'Ticket ID': ticketId,
-      'OGI': ogi,
-      'Interaction ID': `INT-${100000+i*3}`,
-      'Interaction Type': 'AI-Agent Call',
-      'Created Date': aiDate.toISOString(),
-      'Reason': Math.random() > 0.08 ? reason : '',
-      'Sub Reason': Math.random() > 0.10 ? subReason : '',
-      'Action Taken': action,
-      'Status': 'Closed',
-      'Assignee': 'AI Agent'
-    });
-
-    // Duplicate AI (10% chance)
-    if (Math.random() < 0.10) {
-      const d2 = new Date(aiDate);
-      d2.setSeconds(d2.getSeconds() + Math.floor(Math.random() < 0.5 ? 0 : Math.random()*120));
-      rows.push({
-        'Ticket ID': ticketId,
-        'OGI': ogi,
-        'Interaction ID': `INT-${100000+i*3+1}`,
-        'Interaction Type': 'AI-Agent Call',
-        'Created Date': d2.toISOString(),
-        'Reason': reason, 'Sub Reason': subReason, 'Action Taken': action,
-        'Status': 'Closed', 'Assignee': 'AI Agent'
-      });
-    }
-
-    // Internal interaction (30% chance)
-    if (Math.random() < 0.30) {
-      const d3 = new Date(aiDate);
-      d3.setMinutes(d3.getMinutes() + 5);
-      const internalTypes = ['TL Review','QC Audit','Internal Notes'];
-      rows.push({
-        'Ticket ID': ticketId,
-        'OGI': ogi,
-        'Interaction ID': `INT-${100000+i*3+2}`,
-        'Interaction Type': internalTypes[Math.floor(Math.random()*internalTypes.length)],
-        'Created Date': d3.toISOString(),
-        'Reason': reason, 'Sub Reason': subReason, 'Action Taken': action,
-        'Status': 'Closed', 'Assignee': 'Team Lead'
-      });
-    }
-
-    // Human follow-up (25% chance)
-    if (Math.random() < 0.25) {
-      const d4 = new Date(aiDate);
-      d4.setMinutes(d4.getMinutes() + 15 + Math.floor(Math.random()*60));
-      const humanTypes = ['Call','Email','Chat'];
-      const agents = ['Arya J S','Amal Krishna A','Haleema Raheem','Aswin AV','Nimi M Nair','Ananthu JR'];
-      rows.push({
-        'Ticket ID': ticketId,
-        'OGI': ogi,
-        'Interaction ID': `INT-${100000+i*3+3}`,
-        'Interaction Type': humanTypes[Math.floor(Math.random()*humanTypes.length)],
-        'Created Date': d4.toISOString(),
-        'Reason': reason, 'Sub Reason': subReason, 'Action Taken': action,
-        'Status': 'Closed',
-        'Assignee': agents[Math.floor(Math.random()*agents.length)]
-      });
-    }
+  for (let i=0; i<n; i++) {
+    const tid = 1000000 + i;
+    const ogi = `OGI${50000000 + Math.floor(i/2)}`;
+    const d = new Date('2026-05-01T00:00:00Z');
+    d.setDate(d.getDate() + Math.floor(Math.random()*38));
+    d.setHours(8 + Math.floor(Math.random()*14), Math.floor(Math.random()*60));
+    const sub = subReasons[Math.floor(Math.random()*subReasons.length)];
+    const action = Math.random()>0.1 ? actions[Math.floor(Math.random()*actions.length)] : '';
+    const reason = Math.random()>0.08 ? (Math.random()>0.5?'Non Escalated':'Not Escalated') : '';
+    rows.push({'Ticket ID':tid,'OGI':ogi,'Interaction':'AI-Agent Call','Interaction date':d.toISOString(),'Interaction ID':2000000+i*3,'TKT_IssueReason':reason,'Sub Reason':Math.random()>0.1?sub:'','Action':action,'Status':'Closed','Vertical':'Parking','SubVertical':'Airport Parking','Agent Name':'AI Agent'});
+    if (Math.random()<0.08) { const d2=new Date(d); d2.setSeconds(d2.getSeconds()+Math.floor(Math.random()*90)); rows.push({'Ticket ID':tid,'OGI':ogi,'Interaction':'AI-Agent Call','Interaction date':d2.toISOString(),'Interaction ID':2000000+i*3+10,'TKT_IssueReason':reason,'Sub Reason':sub,'Action':action,'Status':'Closed','Vertical':'Parking','SubVertical':'Airport Parking','Agent Name':'AI Agent'}); }
+    if (Math.random()<0.3) { const d3=new Date(d); d3.setMinutes(d3.getMinutes()+8); rows.push({'Ticket ID':tid,'OGI':ogi,'Interaction':'TL Review','Interaction date':d3.toISOString(),'Interaction ID':2000000+i*3+11,'TKT_IssueReason':reason,'Sub Reason':sub,'Action':action,'Status':'Closed','Vertical':'Parking','SubVertical':'Airport Parking','Agent Name':'Team Lead'}); }
+    if (Math.random()<0.25) { const d4=new Date(d); d4.setMinutes(d4.getMinutes()+20+Math.floor(Math.random()*60)); rows.push({'Ticket ID':tid,'OGI':ogi,'Interaction':Math.random()>0.5?'Call':'Email','Interaction date':d4.toISOString(),'Interaction ID':2000000+i*3+12,'TKT_IssueReason':reason,'Sub Reason':sub,'Action':'Details provided','Status':'Closed','Vertical':'Parking','SubVertical':'Airport Parking','Agent Name':'Arya J S'}); }
   }
-
   return rows;
 }
 
-// ══════════════════════════════════════════════════
-// FILE UPLOAD HANDLING
-// ══════════════════════════════════════════════════
+// ── FILE UPLOAD ──
 function setupUpload() {
   const dropZone = document.getElementById('dropZone');
   const fileInput = document.getElementById('fileInput');
@@ -447,113 +320,83 @@ function setupUpload() {
   dropZone.addEventListener('click', () => fileInput.click());
   dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
   dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-  dropZone.addEventListener('drop', e => {
-    e.preventDefault();
-    dropZone.classList.remove('drag-over');
-    const file = e.dataTransfer.files[0];
-    if (file) processFile(file);
-  });
-  fileInput.addEventListener('change', e => {
-    if (e.target.files[0]) processFile(e.target.files[0]);
-  });
-
+  dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); if (e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]); });
+  fileInput.addEventListener('change', e => { if (e.target.files[0]) processFile(e.target.files[0]); });
   document.getElementById('loadSampleBtn').addEventListener('click', () => {
-    showToast('Generating 500 synthetic records…', 'info');
-    setTimeout(() => {
-      const rows = generateSampleData(500);
-      processRows(rows, 'sample_data_500.csv');
-    }, 100);
+    showToast('Generating 500 sample records…','info');
+    setTimeout(() => processRows(generateSampleData(500), 'sample_data.xlsx'), 100);
   });
 }
 
 function processFile(file) {
-  if (!file.name.endsWith('.csv') && file.type !== 'text/csv') {
-    showToast('Please upload a CSV file', 'error'); return;
-  }
+  const name = file.name.toLowerCase();
+  const isXLSX = name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.xlsm');
+  const isCSV = name.endsWith('.csv');
+  if (!isXLSX && !isCSV) { showToast('Please upload a CSV or XLSX file','error'); return; }
+
   showUploadProgress();
-  Papa.parse(file, {
-    header: true, skipEmptyLines: true, dynamicTyping: false,
-    complete: result => {
-      if (result.errors.length > 3) {
-        showToast('CSV parsing issues — check file format', 'error');
-      }
-      processRows(result.data, file.name);
-    },
-    error: err => showToast('Failed to parse CSV: ' + err.message, 'error')
-  });
+  showToast(`Reading ${isXLSX ? 'Excel' : 'CSV'} file…`, 'info');
+
+  if (isXLSX) {
+    readXLSX(file).then(rows => processRows(rows, file.name)).catch(err => { showToast('Failed to read Excel file: ' + err.message, 'error'); completeProgress(); });
+  } else {
+    Papa.parse(file, {
+      header: true, skipEmptyLines: true, dynamicTyping: false,
+      complete: result => processRows(result.data, file.name),
+      error: err => { showToast('CSV parse error: ' + err.message, 'error'); completeProgress(); }
+    });
+  }
 }
 
 function showUploadProgress() {
   const pg = document.getElementById('uploadProgress');
   const bar = document.getElementById('progressBar');
-  pg.style.display='block';
-  let p=0;
-  const iv = setInterval(() => {
-    p = Math.min(p + Math.random()*15, 90);
-    bar.style.width = p + '%';
-    if (p >= 90) clearInterval(iv);
-  }, 120);
-  STATE._progressInterval = iv;
-  STATE._progressBar = bar;
+  pg.style.display = 'block';
+  let p = 0;
+  const iv = setInterval(() => { p = Math.min(p + Math.random()*12, 88); bar.style.width = p + '%'; if (p >= 88) clearInterval(iv); }, 150);
+  STATE._piv = iv; STATE._pbar = bar;
 }
 
 function completeProgress() {
-  clearInterval(STATE._progressInterval);
-  if (STATE._progressBar) STATE._progressBar.style.width = '100%';
-  setTimeout(() => { document.getElementById('uploadProgress').style.display='none'; }, 500);
+  clearInterval(STATE._piv);
+  if (STATE._pbar) STATE._pbar.style.width = '100%';
+  setTimeout(() => { document.getElementById('uploadProgress').style.display = 'none'; }, 600);
 }
 
 function processRows(rows, filename) {
   STATE.rawRows = rows;
-  STATE.normalizedRows = normalizeColumns(rows);
-
-  // Show file status
-  const now = new Date();
-  document.getElementById('fileStatus').style.display='block';
+  document.getElementById('fileStatus').style.display = 'block';
   document.getElementById('statFilename').textContent = filename;
-  document.getElementById('statLoaded').textContent = now.toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}).replace(',','');
+  document.getElementById('statLoaded').textContent = new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
   document.getElementById('statRecords').textContent = rows.length.toLocaleString();
-  document.getElementById('statStatus').innerHTML = '<span style="color:var(--green)">✓ Processed Successfully</span>';
+  document.getElementById('statStatus').innerHTML = '<span style="color:#059669">✓ Processed Successfully</span>';
 
   completeProgress();
 
-  // Validation
-  const val = validateData(STATE.normalizedRows);
+  const val = validateData(rows);
   renderValidation(val);
 
-  if (!val.passed) {
-    showToast('Validation failed — check required columns', 'error');
-    return;
-  }
+  if (!val.passed) { showToast('Validation failed — required columns missing','error'); return; }
 
-  // Build ticket map
-  STATE.ticketMap = buildTicketMap(STATE.normalizedRows);
+  STATE.ticketMap = buildTicketMap(rows);
   STATE.filteredTickets = new Map(STATE.ticketMap);
 
-  // Update hero meta
   const m = computeMetrics(STATE.ticketMap);
   document.getElementById('heroMeta').innerHTML = `
     <span class="meta-pill"><i class="fa-solid fa-database"></i> ${fmt.num(rows.length)} records</span>
     <span class="meta-pill"><i class="fa-solid fa-ticket"></i> ${fmt.num(m.totalTickets)} tickets</span>
     <span class="meta-pill"><i class="fa-solid fa-robot"></i> ${fmt.num(m.aiTickets)} AI tickets</span>
-    <span class="meta-pill" style="color:var(--green)"><i class="fa-solid fa-circle-check"></i> Live</span>
+    <span class="meta-pill" style="color:#86efac"><i class="fa-solid fa-circle-check"></i> Live</span>
   `;
 
-  // Populate filter dropdowns
   populateFilters();
-
-  // Render everything
   renderDashboard();
-
-  showToast(`Loaded ${fmt.num(rows.length)} records — ${fmt.num(m.aiTickets)} AI tickets found`, 'success');
+  showToast(`Loaded ${fmt.num(rows.length)} records — ${fmt.num(m.aiTickets)} AI tickets`, 'success');
 }
 
-// ══════════════════════════════════════════════════
-// VALIDATION RENDER
-// ══════════════════════════════════════════════════
+// ── VALIDATION RENDER ──
 function renderValidation(val) {
   const { counts, checks, passed } = val;
-
   document.getElementById('vv-records').textContent = fmt.num(counts.records);
   document.getElementById('vv-ogi').textContent = fmt.num(counts.uniqueOGI);
   document.getElementById('vv-tickets').textContent = fmt.num(counts.uniqueTickets);
@@ -563,13 +406,13 @@ function renderValidation(val) {
   document.getElementById('vv-internal').textContent = fmt.num(counts.internalInteractions);
 
   const checkMap = {
-    'chk-cols':  { ok: checks.cols, label: 'Required columns present' },
-    'chk-ticket':{ ok: checks.ticket, label: 'Ticket IDs present' },
-    'chk-ogi':   { ok: checks.ogi, label: 'OGI identifiers present' },
-    'chk-types': { ok: checks.types, label: 'Interaction types present' },
-    'chk-compliance': { ok: checks.compliance, label: 'Compliance fields present' }
+    'chk-cols':{'ok':checks.cols,'label':'Required columns present'},
+    'chk-ticket':{'ok':checks.ticket,'label':'Ticket IDs present'},
+    'chk-ogi':{'ok':checks.ogi,'label':'OGI identifiers present'},
+    'chk-types':{'ok':checks.types,'label':'Interaction types present'},
+    'chk-compliance':{'ok':checks.compliance,'label':'Compliance fields present'}
   };
-  Object.entries(checkMap).forEach(([id, {ok, label}]) => {
+  Object.entries(checkMap).forEach(([id,{ok,label}]) => {
     const el = document.getElementById(id);
     el.className = `val-check-item ${ok?'pass':'fail'}`;
     el.innerHTML = `<i class="fa-solid fa-${ok?'circle-check':'circle-xmark'}"></i> ${label}`;
@@ -577,86 +420,62 @@ function renderValidation(val) {
 
   const badge = document.getElementById('validationBadge');
   badge.className = `validation-badge ${passed?'pass':'fail'}`;
-  badge.innerHTML = `<i class="fa-solid fa-${passed?'shield-check':'shield-xmark'}"></i> ${passed?'Validation Passed':'Validation Failed'}`;
-
+  badge.innerHTML = `<i class="fa-solid fa-${passed?'shield-check':'shield-xmark'}"></i> ${passed?'✓ Validation Passed':'✗ Validation Failed'}`;
   STATE.validationPassed = passed;
   unlockSection('section-validation');
 }
 
-// ══════════════════════════════════════════════════
-// POPULATE FILTERS
-// ══════════════════════════════════════════════════
+// ── FILTERS ──
 function populateFilters() {
   const tickets = [...STATE.ticketMap.values()];
-  const reasons = [...new Set(tickets.map(t => t.reason).filter(Boolean))].sort();
-  const types = [...new Set(STATE.normalizedRows.map(r => r['Interaction Type']).filter(Boolean))].sort();
+  const reasons = [...new Set(tickets.map(t=>t.subReason||t.reason).filter(Boolean))].sort();
+  const rs = document.getElementById('filterReason');
+  rs.innerHTML = '<option value="">All Sub Reasons</option>';
+  reasons.slice(0,50).forEach(r => { rs.innerHTML += `<option value="${r}">${r}</option>`; });
 
-  const rSelect = document.getElementById('filterReason');
-  rSelect.innerHTML = '<option value="">All Reasons</option>';
-  reasons.forEach(r => { rSelect.innerHTML += `<option value="${r}">${r}</option>`; });
+  const verticals = [...new Set(tickets.map(t=>t.subVertical||t.vertical).filter(Boolean))].sort();
+  const ts = document.getElementById('filterType');
+  ts.innerHTML = '<option value="">All Verticals</option>';
+  verticals.forEach(v => { ts.innerHTML += `<option value="${v}">${v}</option>`; });
 
-  const tSelect = document.getElementById('filterType');
-  tSelect.innerHTML = '<option value="">All Types</option>';
-  types.forEach(t => { tSelect.innerHTML += `<option value="${t}">${t}</option>`; });
-
-  // Date range
-  const dates = tickets.map(t => t.createdDate).filter(Boolean).map(d => new Date(d)).filter(d => !isNaN(d));
+  const dates = tickets.map(t=>t.createdDate).filter(Boolean).map(d=>new Date(d)).filter(d=>!isNaN(d));
   if (dates.length) {
     const min = new Date(Math.min(...dates)).toISOString().slice(0,10);
     const max = new Date(Math.max(...dates)).toISOString().slice(0,10);
     document.getElementById('filterDateFrom').value = min;
     document.getElementById('filterDateTo').value = max;
-    document.getElementById('filterDateFrom').min = min;
-    document.getElementById('filterDateTo').max = max;
   }
 }
 
-// ══════════════════════════════════════════════════
-// FILTERS
-// ══════════════════════════════════════════════════
 function applyFilters() {
   const dateFrom = document.getElementById('filterDateFrom').value;
   const dateTo = document.getElementById('filterDateTo').value;
   const reason = document.getElementById('filterReason').value;
-  const type = document.getElementById('filterType').value;
+  const vertical = document.getElementById('filterType').value;
 
   STATE.filteredTickets = new Map();
   STATE.ticketMap.forEach((ticket, id) => {
-    if (dateFrom) {
-      const d = new Date(ticket.createdDate);
-      if (!isNaN(d) && d < new Date(dateFrom)) return;
-    }
-    if (dateTo) {
-      const d = new Date(ticket.createdDate);
-      if (!isNaN(d) && d > new Date(dateTo + 'T23:59:59')) return;
-    }
-    if (reason && ticket.reason !== reason) return;
-    if (type && !ticket.interactions.some(i => i.type === type)) return;
+    if (dateFrom) { const d = new Date(ticket.createdDate); if (!isNaN(d) && d < new Date(dateFrom)) return; }
+    if (dateTo) { const d = new Date(ticket.createdDate); if (!isNaN(d) && d > new Date(dateTo+'T23:59:59')) return; }
+    if (reason && ticket.subReason !== reason && ticket.reason !== reason) return;
+    if (vertical && ticket.subVertical !== vertical && ticket.vertical !== vertical) return;
     STATE.filteredTickets.set(id, ticket);
   });
-
-  STATE.filterActive = true;
   renderDashboard();
   showToast(`Filter applied — ${fmt.num(STATE.filteredTickets.size)} tickets`, 'info');
 }
 
 function clearFilters() {
   STATE.filteredTickets = new Map(STATE.ticketMap);
-  STATE.filterActive = false;
   populateFilters();
   renderDashboard();
   showToast('Filters cleared', 'info');
 }
 
-// ══════════════════════════════════════════════════
-// MAIN DASHBOARD RENDER
-// ══════════════════════════════════════════════════
+// ── RENDER DASHBOARD ──
 function renderDashboard() {
   const m = computeMetrics(STATE.filteredTickets);
-
-  // Unlock all sections
   ['section-filters','section-kpis','section-effectiveness','section-compliance','section-defects','section-reasons','section-tickets','section-ceo'].forEach(unlockSection);
-
   renderKPIs(m);
   renderFunnel(m);
   renderEffectivenessCharts(m);
@@ -667,831 +486,439 @@ function renderDashboard() {
   renderCEOSummary(m);
 }
 
-// ══════════════════════════════════════════════════
-// KPI CARDS
-// ══════════════════════════════════════════════════
+// ── KPIs ──
 function renderKPIs(m) {
   const kpis = [
-    { label:'AI Tickets Created', val:fmt.num(m.aiTickets), pct:null, icon:'fa-robot', color:'cyan', tooltip:'Unique Ticket IDs containing at least one AI-Agent Call interaction', level:'Ticket' },
-    { label:'AI Agent Interactions', val:fmt.num(m.aiInteractions), pct:null, icon:'fa-message-bot', color:'purple', tooltip:'Total count of AI-Agent Call interaction records', level:'Interaction' },
-    { label:'AI FCR Rate', val:fmt.pct(m.fcrRate), pct:m.fcrRate, icon:'fa-bullseye', color:'green', tooltip:'AI tickets resolved in a single customer-facing interaction (no follow-up needed)', level:'Ticket' },
-    { label:'AI Containment Rate', val:fmt.pct(m.containmentRate), pct:m.containmentRate, icon:'fa-shield-halved', color:'green', tooltip:'AI tickets with no customer-facing human interaction after AI', level:'Ticket' },
-    { label:'Escalated to Human', val:fmt.num(m.escalated), pct:m.escalationRate, icon:'fa-person-walking-arrow-right', color:'amber', tooltip:'AI tickets where customer was later transferred to a human agent via call', level:'Ticket' },
-    { label:'Human Touch Rate', val:fmt.pct(m.humanTouchRate), pct:m.humanTouchRate, icon:'fa-hand-holding', color:'amber', tooltip:'AI tickets that received any customer-facing human contact after AI interaction', level:'Ticket' },
-    { label:'Compliance Rate', val:fmt.pct(m.complianceRate), pct:m.complianceRate, icon:'fa-clipboard-check', color:'green', tooltip:'AI tickets with Reason, Sub Reason, and Action Taken all populated', level:'Ticket' },
-    { label:'Duplicate AI Tickets', val:fmt.num(m.duplicateAITickets), pct:null, icon:'fa-copy', color:'red', tooltip:'AI tickets containing more than one AI-Agent Call interaction', level:'Ticket' },
-    { label:'Same Timestamp Defects', val:fmt.num(m.sameTimestampDefects), pct:null, icon:'fa-clock', color:'red', tooltip:'AI interactions created at identical timestamps within the same ticket', level:'Interaction' },
-    { label:'Compliance Failures', val:fmt.num(m.aiTickets - m.compliant), pct:null, icon:'fa-triangle-exclamation', color:'red', tooltip:'AI tickets missing any of: Reason, Sub Reason, or Action Taken', level:'Ticket' }
+    {label:'AI Tickets Created', val:fmt.num(m.aiTickets), pctVal:null, icon:'fa-robot', color:'cyan', tip:'Unique Ticket IDs with at least one AI-Agent Call', level:'Ticket'},
+    {label:'AI Agent Interactions', val:fmt.num(m.aiInteractions), pctVal:null, icon:'fa-comments', color:'purple', tip:'Total AI-Agent Call interaction records', level:'Interaction'},
+    {label:'AI FCR Rate', val:fmt.pct(m.fcrRate), pctVal:m.fcrRate, icon:'fa-bullseye', color:'green', tip:'AI tickets resolved in single customer-facing contact', level:'Ticket'},
+    {label:'AI Containment Rate', val:fmt.pct(m.containmentRate), pctVal:m.containmentRate, icon:'fa-shield-halved', color:'green', tip:'AI tickets with no human follow-up after AI', level:'Ticket'},
+    {label:'Escalated to Human', val:fmt.num(m.escalated), pctVal:m.escalationRate, icon:'fa-person-walking-arrow-right', color:'amber', tip:'AI tickets where customer called back after AI', level:'Ticket'},
+    {label:'Human Touch Rate', val:fmt.pct(m.humanTouchRate), pctVal:m.humanTouchRate, icon:'fa-hand-holding', color:'amber', tip:'AI tickets receiving any human customer contact after AI', level:'Ticket'},
+    {label:'Compliance Rate', val:fmt.pct(m.complianceRate), pctVal:m.complianceRate, icon:'fa-clipboard-check', color:'green', tip:'AI tickets with Reason + Sub Reason + Action all filled', level:'Ticket'},
+    {label:'Duplicate AI Tickets', val:fmt.num(m.duplicateAITickets), pctVal:null, icon:'fa-copy', color:'red', tip:'Tickets with more than one AI-Agent Call interaction', level:'Ticket'},
+    {label:'Same Timestamp Defects', val:fmt.num(m.sameTimestampDefects), pctVal:null, icon:'fa-clock', color:'red', tip:'AI interactions with identical timestamps on same ticket', level:'Interaction'},
+    {label:'Compliance Failures', val:fmt.num(m.aiTickets - m.compliant), pctVal:null, icon:'fa-triangle-exclamation', color:'red', tip:'AI tickets missing any compliance field', level:'Ticket'}
   ];
-
   const colorMap = {
-    cyan:   { accent: 'var(--cyan)', dim: 'var(--cyan-dim)' },
-    purple: { accent: 'var(--purple)', dim: 'var(--purple-dim)' },
-    green:  { accent: 'var(--green)', dim: 'var(--green-dim)' },
-    amber:  { accent: 'var(--amber)', dim: 'var(--amber-dim)' },
-    red:    { accent: 'var(--red)', dim: 'var(--red-dim)' }
+    cyan:{a:'var(--cyan)',d:'var(--cyan-dim)'},
+    purple:{a:'var(--purple)',d:'var(--purple-dim)'},
+    green:{a:'var(--green)',d:'var(--green-dim)'},
+    amber:{a:'var(--amber)',d:'var(--amber-dim)'},
+    red:{a:'var(--red)',d:'var(--red-dim)'}
   };
-
-  const grid = document.getElementById('kpiGrid');
-  grid.innerHTML = kpis.map(k => {
-    const c = colorMap[k.color] || colorMap.cyan;
-    const pctHtml = k.pct != null ? `<div class="kpi-pct">${fmt.pct(k.pct)}</div>` : '';
-    const levelClass = k.level === 'Interaction' ? 'interaction' : '';
-    return `
-      <div class="kpi-card" style="--accent-color:${c.accent};--accent-dim:${c.dim}">
-        <div class="kpi-tooltip" title="${k.tooltip}"><i class="fa-solid fa-circle-info"></i></div>
-        <div class="kpi-icon"><i class="fa-solid ${k.icon}"></i></div>
-        <div class="kpi-label">${k.label}</div>
-        <div class="kpi-value">${k.val}</div>
-        ${pctHtml}
-        <div class="kpi-level-badge">${k.level} Level</div>
-      </div>`;
+  document.getElementById('kpiGrid').innerHTML = kpis.map(k => {
+    const c = colorMap[k.color]||colorMap.cyan;
+    const lvlClass = k.level==='Interaction'?'interaction':'';
+    return `<div class="kpi-card" style="--accent-color:${c.a};--accent-dim:${c.d}">
+      <div class="kpi-tooltip" title="${k.tip}"><i class="fa-solid fa-circle-info"></i></div>
+      <div class="kpi-icon"><i class="fa-solid ${k.icon}"></i></div>
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-value">${k.val}</div>
+      ${k.pctVal!=null?`<div class="kpi-pct">${fmt.pct(k.pctVal)}</div>`:''}
+      <div class="kpi-level-badge ${lvlClass}">${k.level} Level</div>
+    </div>`;
   }).join('');
 }
 
-// ══════════════════════════════════════════════════
-// FUNNEL
-// ══════════════════════════════════════════════════
+// ── FUNNEL ──
 function renderFunnel(m) {
   const stages = [
-    { label:'AI Tickets', val:m.aiTickets, pct:100, bg:'linear-gradient(135deg,#00a8cc,#0076cc)' },
-    { label:'AI Only', val:m.aiOnly, pct:pct(m.aiOnly,m.aiTickets), bg:'linear-gradient(135deg,#00cc88,#00a86b)' },
-    { label:'Human Assisted', val:m.humanAssisted, pct:pct(m.humanAssisted,m.aiTickets), bg:'linear-gradient(135deg,#ffb930,#ff8c00)' },
-    { label:'Escalated', val:m.escalated, pct:pct(m.escalated,m.aiTickets), bg:'linear-gradient(135deg,#ff6b6b,#cc0033)' }
+    {label:'AI Tickets',val:m.aiTickets,pct:100,bg:'linear-gradient(135deg,#0ea5e9,#0369a1)'},
+    {label:'AI Only',val:m.aiOnly,pct:pct(m.aiOnly,m.aiTickets),bg:'linear-gradient(135deg,#10b981,#059669)'},
+    {label:'Human Assisted',val:m.humanAssisted,pct:pct(m.humanAssisted,m.aiTickets),bg:'linear-gradient(135deg,#f59e0b,#d97706)'},
+    {label:'Escalated',val:m.escalated,pct:pct(m.escalated,m.aiTickets),bg:'linear-gradient(135deg,#ef4444,#dc2626)'}
   ];
-
-  const container = document.getElementById('funnelVisual');
-  container.innerHTML = stages.map((s,i) => `
-    ${i>0?'<div class="funnel-arrow"><i class="fa-solid fa-chevron-right"></i></div>':''}
-    <div class="funnel-stage" style="background:${s.bg}" title="${s.label}: ${fmt.num(s.val)} (${fmt.pct(s.pct)})">
+  document.getElementById('funnelVisual').innerHTML = stages.map((s,i) =>
+    `${i>0?'<div class="funnel-arrow"><i class="fa-solid fa-chevron-right"></i></div>':''}
+    <div class="funnel-stage" style="background:${s.bg}">
       <div class="funnel-stage-label">${s.label}</div>
       <div class="funnel-stage-val">${fmt.num(s.val)}</div>
       <div class="funnel-stage-pct">${fmt.pct(s.pct)}</div>
-    </div>
-  `).join('');
+    </div>`).join('');
 }
 
-// ══════════════════════════════════════════════════
-// CHART HELPERS
-// ══════════════════════════════════════════════════
-function getChartDefaults() {
-  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
-  return {
-    textColor: isDark ? '#7a95b8' : '#445566',
-    gridColor: isDark ? '#1a2d45' : '#d0dce9',
-    bgSurface: isDark ? '#101d30' : '#ffffff'
-  };
+// ── CHART HELPERS ──
+function getChartColors() {
+  return { text:'#64748b', grid:'#e2e8f0' };
 }
-
-function destroyChart(id) {
-  if (STATE.charts[id]) { STATE.charts[id].destroy(); delete STATE.charts[id]; }
-}
+function destroyChart(id) { if (STATE.charts[id]) { STATE.charts[id].destroy(); delete STATE.charts[id]; } }
 
 function getDateBuckets(ticketMap) {
-  const buckets = new Map();
-  ticketMap.forEach(t => {
-    if (t.dateBucket) {
-      if (!buckets.has(t.dateBucket)) buckets.set(t.dateBucket, []);
-      buckets.get(t.dateBucket).push(t);
-    }
-  });
-  // Sort by date
-  return new Map([...buckets.entries()].sort((a,b) => a[0].localeCompare(b[0])));
+  const b = new Map();
+  ticketMap.forEach(t => { if (t.dateBucket) { if (!b.has(t.dateBucket)) b.set(t.dateBucket,[]); b.get(t.dateBucket).push(t); } });
+  return new Map([...b.entries()].sort((a,b)=>a[0].localeCompare(b[0])));
 }
 
-// ══════════════════════════════════════════════════
-// EFFECTIVENESS CHARTS
-// ══════════════════════════════════════════════════
+// ── EFFECTIVENESS CHARTS ──
 function renderEffectivenessCharts(m) {
-  const { textColor, gridColor } = getChartDefaults();
+  const {text,grid} = getChartColors();
   const buckets = getDateBuckets(STATE.filteredTickets);
-  const labels = [...buckets.keys()].map(d => {
-    const dt = new Date(d);
-    return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});
-  });
+  const labels = [...buckets.keys()].map(d => new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric'}));
+  const aiCounts = [...buckets.values()].map(ts=>ts.filter(t=>t.isAITicket).length);
+  const aiIntCounts = [...buckets.values()].map(ts=>ts.reduce((s,t)=>s+t.aiInteractionCount,0));
+  const fcrRates = [...buckets.values()].map(ts=>{const ai=ts.filter(t=>t.isAITicket);return ai.length?pct(ai.filter(t=>t.fcrAchieved).length,ai.length):0;});
+  const htRates = [...buckets.values()].map(ts=>{const ai=ts.filter(t=>t.isAITicket);return ai.length?pct(ai.filter(t=>t.humanTouchAfterAI).length,ai.length):0;});
+  const escRates = [...buckets.values()].map(ts=>{const ai=ts.filter(t=>t.isAITicket);return ai.length?pct(ai.filter(t=>t.escalated).length,ai.length):0;});
 
-  const aiCounts = [...buckets.values()].map(ts => ts.filter(t=>t.isAITicket).length);
-  const aiInteractionCounts = [...buckets.values()].map(ts => ts.reduce((s,t)=>s+t.aiInteractionCount,0));
-  const fcrRates = [...buckets.values()].map(ts => {
-    const ai = ts.filter(t=>t.isAITicket);
-    return ai.length ? pct(ai.filter(t=>t.fcrAchieved).length, ai.length) : 0;
-  });
-  const humanTouchRates = [...buckets.values()].map(ts => {
-    const ai = ts.filter(t=>t.isAITicket);
-    return ai.length ? pct(ai.filter(t=>t.humanTouchAfterAI).length, ai.length) : 0;
-  });
-  const escalationRates = [...buckets.values()].map(ts => {
-    const ai = ts.filter(t=>t.isAITicket);
-    return ai.length ? pct(ai.filter(t=>t.escalated).length, ai.length) : 0;
-  });
-
-  const baseLineOpts = {
-    responsive: true, maintainAspectRatio: true,
-    interaction: { mode:'index', intersect:false },
-    plugins: { legend:{labels:{color:textColor,font:{size:11}}}, tooltip:{backgroundColor:'#0d1626',borderColor:'#1a2d45',borderWidth:1} },
-    scales: {
-      x: { ticks:{color:textColor,font:{size:10},maxRotation:45}, grid:{color:gridColor} },
-      y: { ticks:{color:textColor,font:{size:10}}, grid:{color:gridColor}, beginAtZero:true }
-    }
+  const base = {
+    responsive:true, maintainAspectRatio:true,
+    interaction:{mode:'index',intersect:false},
+    plugins:{legend:{labels:{color:text,font:{size:11}}}, tooltip:{backgroundColor:'#fff',titleColor:'#0f172a',bodyColor:'#475569',borderColor:'#e2e8f0',borderWidth:1}},
+    scales:{x:{ticks:{color:text,font:{size:10},maxRotation:45},grid:{color:grid}},y:{ticks:{color:text,font:{size:10}},grid:{color:grid},beginAtZero:true}}
   };
 
-  // AI Tickets Trend
   destroyChart('aiTicketsTrend');
-  STATE.charts.aiTicketsTrend = new Chart(document.getElementById('aiTicketsTrend'), {
-    type:'bar', data:{
-      labels, datasets:[{
-        label:'AI Tickets', data:aiCounts,
-        backgroundColor:'rgba(0,212,255,0.3)', borderColor:'rgba(0,212,255,0.8)', borderWidth:1
-      }]
-    }, options:{...baseLineOpts}
-  });
+  STATE.charts.aiTicketsTrend = new Chart(document.getElementById('aiTicketsTrend'), {type:'bar', data:{labels, datasets:[{label:'AI Tickets',data:aiCounts,backgroundColor:'rgba(2,132,199,0.6)',borderRadius:4}]}, options:{...base}});
 
-  // AI Interactions Trend
   destroyChart('aiInteractionsTrend');
-  STATE.charts.aiInteractionsTrend = new Chart(document.getElementById('aiInteractionsTrend'), {
-    type:'bar', data:{
-      labels, datasets:[{
-        label:'AI Interactions', data:aiInteractionCounts,
-        backgroundColor:'rgba(155,109,255,0.3)', borderColor:'rgba(155,109,255,0.8)', borderWidth:1
-      }]
-    }, options:{...baseLineOpts}
-  });
+  STATE.charts.aiInteractionsTrend = new Chart(document.getElementById('aiInteractionsTrend'), {type:'bar', data:{labels, datasets:[{label:'AI Interactions',data:aiIntCounts,backgroundColor:'rgba(124,58,237,0.6)',borderRadius:4}]}, options:{...base}});
 
-  // FCR Trend
   destroyChart('fcrTrend');
-  STATE.charts.fcrTrend = new Chart(document.getElementById('fcrTrend'), {
-    type:'line', data:{
-      labels, datasets:[{
-        label:'FCR Rate %', data:fcrRates,
-        borderColor:'var(--green)', backgroundColor:'rgba(0,229,150,0.1)',
-        fill:true, tension:0.4, pointRadius:3
-      }]
-    }, options:{
-      ...baseLineOpts,
-      scales:{
-        x:{ ticks:{color:textColor,font:{size:10},maxRotation:45}, grid:{color:gridColor} },
-        y:{ ticks:{color:textColor,font:{size:10},callback:v=>v+'%'}, grid:{color:gridColor}, beginAtZero:true, max:100 }
-      }
-    }
-  });
+  STATE.charts.fcrTrend = new Chart(document.getElementById('fcrTrend'), {type:'line', data:{labels, datasets:[{label:'FCR Rate %',data:fcrRates,borderColor:'#059669',backgroundColor:'rgba(5,150,105,0.1)',fill:true,tension:0.4,pointRadius:3,pointBackgroundColor:'#059669'}]}, options:{...base, scales:{x:{ticks:{color:text,font:{size:10},maxRotation:45},grid:{color:grid}},y:{ticks:{color:text,font:{size:10},callback:v=>v+'%'},grid:{color:grid},beginAtZero:true,max:100}}}});
 
-  // Human Touch & Escalation
   destroyChart('humanTrend');
-  STATE.charts.humanTrend = new Chart(document.getElementById('humanTrend'), {
-    type:'line', data:{
-      labels, datasets:[
-        { label:'Human Touch %', data:humanTouchRates, borderColor:'var(--amber)', backgroundColor:'rgba(255,185,48,0.1)', fill:true, tension:0.4, pointRadius:3 },
-        { label:'Escalation %', data:escalationRates, borderColor:'var(--red)', backgroundColor:'rgba(255,77,106,0.05)', fill:false, tension:0.4, pointRadius:3, borderDash:[4,4] }
-      ]
-    }, options:{
-      ...baseLineOpts,
-      scales:{
-        x:{ ticks:{color:textColor,font:{size:10},maxRotation:45}, grid:{color:gridColor} },
-        y:{ ticks:{color:textColor,font:{size:10},callback:v=>v+'%'}, grid:{color:gridColor}, beginAtZero:true }
-      }
-    }
-  });
+  STATE.charts.humanTrend = new Chart(document.getElementById('humanTrend'), {type:'line', data:{labels, datasets:[{label:'Human Touch %',data:htRates,borderColor:'#d97706',backgroundColor:'rgba(217,119,6,0.08)',fill:true,tension:0.4,pointRadius:3},{label:'Escalation %',data:escRates,borderColor:'#dc2626',fill:false,tension:0.4,pointRadius:3,borderDash:[5,4]}]}, options:{...base, scales:{x:{ticks:{color:text,font:{size:10},maxRotation:45},grid:{color:grid}},y:{ticks:{color:text,font:{size:10},callback:v=>v+'%'},grid:{color:grid},beginAtZero:true}}}});
 }
 
-// ══════════════════════════════════════════════════
-// COMPLIANCE SECTION
-// ══════════════════════════════════════════════════
+// ── COMPLIANCE ──
 function renderComplianceSection(m) {
   document.getElementById('gaugeCompPct').textContent = fmt.pct(m.complianceRate);
   document.getElementById('cv-full').textContent = fmt.num(m.compliant);
   document.getElementById('cv-reason').textContent = fmt.num(m.missingReason);
   document.getElementById('cv-sub').textContent = fmt.num(m.missingSubReason);
   document.getElementById('cv-action').textContent = fmt.num(m.missingAction);
-
-  // Gauge
   renderGauge('complianceGauge', m.complianceRate);
 
-  // Pie
-  const { textColor } = getChartDefaults();
+  const {text,grid} = getChartColors();
   destroyChart('compliancePie');
   STATE.charts.compliancePie = new Chart(document.getElementById('compliancePie'), {
-    type:'doughnut', data:{
-      labels:['Compliant','Missing Reason','Missing Sub Reason','Missing Action'],
-      datasets:[{ data:[m.compliant, m.missingReason, m.missingSubReason, m.missingAction],
-        backgroundColor:['rgba(0,229,150,0.7)','rgba(255,77,106,0.7)','rgba(255,185,48,0.7)','rgba(155,109,255,0.7)'],
-        borderColor:'var(--bg-card)', borderWidth:2
-      }]
-    },
-    options:{
-      responsive:true, plugins:{
-        legend:{position:'bottom',labels:{color:textColor,font:{size:11},padding:12}},
-        tooltip:{backgroundColor:'#0d1626',borderColor:'#1a2d45',borderWidth:1}
-      }
-    }
+    type:'doughnut',
+    data:{labels:['Compliant','Missing Reason','Missing Sub Reason','Missing Action'],datasets:[{data:[m.compliant,m.missingReason,m.missingSubReason,m.missingAction],backgroundColor:['#10b981','#ef4444','#f59e0b','#8b5cf6'],borderColor:'#fff',borderWidth:2}]},
+    options:{responsive:true,plugins:{legend:{position:'bottom',labels:{color:text,font:{size:11},padding:10}},tooltip:{backgroundColor:'#fff',titleColor:'#0f172a',bodyColor:'#475569',borderColor:'#e2e8f0',borderWidth:1}}}
   });
 
-  // Bar by date
   const buckets = getDateBuckets(STATE.filteredTickets);
   const labels = [...buckets.keys()].map(d => new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric'}));
-  const { gridColor } = getChartDefaults();
-
   destroyChart('complianceBar');
   STATE.charts.complianceBar = new Chart(document.getElementById('complianceBar'), {
-    type:'bar', data:{
-      labels,
-      datasets:[
-        { label:'Missing Reason', data:[...buckets.values()].map(ts=>ts.filter(t=>t.isAITicket&&t.missingReason).length), backgroundColor:'rgba(255,77,106,0.7)' },
-        { label:'Missing Sub Reason', data:[...buckets.values()].map(ts=>ts.filter(t=>t.isAITicket&&t.missingSubReason).length), backgroundColor:'rgba(255,185,48,0.7)' },
-        { label:'Missing Action', data:[...buckets.values()].map(ts=>ts.filter(t=>t.isAITicket&&t.missingAction).length), backgroundColor:'rgba(155,109,255,0.7)' }
-      ]
-    },
-    options:{
-      responsive:true, plugins:{legend:{labels:{color:textColor,font:{size:11}}}},
-      scales:{
-        x:{stacked:true, ticks:{color:textColor,font:{size:10},maxRotation:45}, grid:{color:gridColor}},
-        y:{stacked:true, ticks:{color:textColor,font:{size:10}}, grid:{color:gridColor}, beginAtZero:true}
-      }
-    }
+    type:'bar',
+    data:{labels,datasets:[{label:'Missing Reason',data:[...buckets.values()].map(ts=>ts.filter(t=>t.isAITicket&&t.missingReason).length),backgroundColor:'rgba(239,68,68,0.7)'},{label:'Missing Sub Reason',data:[...buckets.values()].map(ts=>ts.filter(t=>t.isAITicket&&t.missingSubReason).length),backgroundColor:'rgba(245,158,11,0.7)'},{label:'Missing Action',data:[...buckets.values()].map(ts=>ts.filter(t=>t.isAITicket&&t.missingAction).length),backgroundColor:'rgba(139,92,246,0.7)'}]},
+    options:{responsive:true,plugins:{legend:{labels:{color:text,font:{size:11}}}},scales:{x:{stacked:true,ticks:{color:text,font:{size:10},maxRotation:45},grid:{color:grid}},y:{stacked:true,ticks:{color:text,font:{size:10}},grid:{color:grid},beginAtZero:true}}}
   });
+
+  setupComplianceDrills();
 }
 
-function renderGauge(canvasId, percentage) {
-  const canvas = document.getElementById(canvasId);
+function renderGauge(id, percentage) {
+  const canvas = document.getElementById(id);
   if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const w = canvas.width, h = canvas.height;
-  const cx = w/2, cy = h/2;
-  const r = Math.min(w,h)/2 - 20;
-
+  const ctx = canvas.getContext('2d'), w=canvas.width, h=canvas.height, cx=w/2, cy=h/2, r=Math.min(w,h)/2-18;
   ctx.clearRect(0,0,w,h);
-
-  // Background arc
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, Math.PI*0.75, Math.PI*2.25);
-  ctx.strokeStyle = 'rgba(122,149,184,0.15)';
-  ctx.lineWidth = 18;
-  ctx.lineCap = 'round';
-  ctx.stroke();
-
-  // Value arc
-  const pctVal = Math.min(100, Math.max(0, percentage));
-  const endAngle = Math.PI*0.75 + (pctVal/100)*(Math.PI*1.5);
-  const color = pctVal >= 80 ? '#00e596' : pctVal >= 65 ? '#ffb930' : '#ff4d6a';
-
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, Math.PI*0.75, endAngle);
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 18;
-  ctx.lineCap = 'round';
-  ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx,cy,r,Math.PI*0.75,Math.PI*2.25); ctx.strokeStyle='#e2e8f0'; ctx.lineWidth=16; ctx.lineCap='round'; ctx.stroke();
+  const p = Math.min(100,Math.max(0,percentage));
+  const color = p>=80?'#10b981':p>=65?'#f59e0b':'#ef4444';
+  ctx.beginPath(); ctx.arc(cx,cy,r,Math.PI*0.75,Math.PI*0.75+(p/100)*Math.PI*1.5); ctx.strokeStyle=color; ctx.lineWidth=16; ctx.lineCap='round'; ctx.stroke();
 }
 
-// ══════════════════════════════════════════════════
-// DEFECT SECTION
-// ══════════════════════════════════════════════════
+// ── DEFECTS ──
 function renderDefectSection(m) {
+  const totalDupInts = [...STATE.filteredTickets.values()].reduce((s,t)=>s+t.duplicateAICount,0);
   const defects = [
-    { label:'Duplicate AI Tickets', val:m.duplicateAITickets, type:'error' },
-    { label:'Duplicate AI Interactions', val:m.aiTickets > 0 ? m.duplicateAITickets > 0 ? [...STATE.filteredTickets.values()].reduce((s,t)=>s+t.duplicateAICount,0) : 0 : 0, type:'error' },
-    { label:'Same Timestamp Defects', val:m.sameTimestampDefects, type:'error' },
-    { label:`Short Interval (<${CONFIG.DEFECT_THRESHOLD_SEC}s)`, val:m.shortIntervalDefects, type:'warn' }
+    {label:'Duplicate AI Tickets',val:m.duplicateAITickets,type:'error'},
+    {label:'Duplicate AI Interactions',val:totalDupInts,type:'error'},
+    {label:'Same Timestamp Defects',val:m.sameTimestampDefects,type:'error'},
+    {label:`Short Interval (<${CONFIG.DEFECT_THRESHOLD_SEC}s)`,val:m.shortIntervalDefects,type:'warn'}
   ];
+  document.getElementById('defectGrid').innerHTML = defects.map(d=>`<div class="defect-card ${d.type==='warn'?'warn':''}"><div class="defect-label">${d.label}</div><div class="defect-val ${d.type==='warn'?'warn':''}">${fmt.num(d.val)}</div></div>`).join('');
 
-  document.getElementById('defectGrid').innerHTML = defects.map(d => `
-    <div class="defect-card ${d.type==='warn'?'warn':''}">
-      <div class="defect-label">${d.label}</div>
-      <div class="defect-val ${d.type==='warn'?'warn':''}">${fmt.num(d.val)}</div>
-    </div>`).join('');
-
-  // Defect table
-  const defectTickets = [...STATE.filteredTickets.values()].filter(t => t.hasDefect);
-
-  if (STATE.datatables.defectTable) {
-    STATE.datatables.defectTable.destroy();
-    document.getElementById('defectTable').innerHTML = '';
-  }
+  const defectTickets = [...STATE.filteredTickets.values()].filter(t=>t.hasDefect);
+  if (STATE.datatables.defectTable) { STATE.datatables.defectTable.destroy(); document.getElementById('defectTable').innerHTML=''; }
   STATE.datatables.defectTable = $('#defectTable').DataTable({
-    data: defectTickets,
-    pageLength: 10,
-    dom: 'Bfrtip',
-    buttons:['csv'],
-    columns: [
-      { title:'Ticket ID', data:'ticketId', render: d => `<span class="ticket-link" onclick="showTimeline('${d}')">${d}</span>` },
-      { title:'OGI', data:'ogi' },
-      { title:'Date', data:'createdDate', render: d => fmt.date(d) },
-      { title:'AI Interactions', data:'aiInteractionCount' },
-      { title:'Duplicate AI', data:'hasDuplicateAI', render: d => d ? badge('YES','red') : badge('No','muted') },
-      { title:'Same TS', data:'sameTimestampDefects', render: d => d > 0 ? badge(d,'red') : badge(0,'muted') },
-      { title:'Short Interval', data:'shortIntervalDefects', render: d => d > 0 ? badge(d,'amber') : badge(0,'muted') },
-      { title:'Reason', data:'reason', render: d => d || '<span style="color:var(--text-muted)">—</span>' }
+    data:defectTickets, pageLength:10, dom:'Bfrtip', buttons:['csv'],
+    columns:[
+      {title:'Ticket ID',data:'ticketId',render:d=>`<span class="ticket-link" onclick="showTimeline('${d}')">${d}</span>`},
+      {title:'Vertical',data:'subVertical',render:(d,_,row)=>d||row.vertical||'—'},
+      {title:'Date',data:'createdDate',render:d=>fmt.date(d)},
+      {title:'AI Ints',data:'aiInteractionCount'},
+      {title:'Duplicate',data:'hasDuplicateAI',render:d=>d?badge('YES','red'):badge('No','muted')},
+      {title:'Same TS',data:'sameTimestampDefects',render:d=>d>0?badge(d,'red'):badge(0,'muted')},
+      {title:'Short Interval',data:'shortIntervalDefects',render:d=>d>0?badge(d,'amber'):badge(0,'muted')}
     ]
   });
 }
 
-// ══════════════════════════════════════════════════
-// REASON ANALYSIS
-// ══════════════════════════════════════════════════
+// ── REASONS ──
 function renderReasonAnalysis(m) {
-  const aiTickets = m.aiTickets ? m.aiTickets : [...STATE.filteredTickets.values()].filter(t=>t.isAITicket);
-  const tickets = typeof aiTickets === 'number' ? [...STATE.filteredTickets.values()].filter(t=>t.isAITicket) : aiTickets;
-
-  const all = [...STATE.filteredTickets.values()];
-
-  // Top reasons AI handled
-  const reasonCountAI = countByField(tickets, 'reason');
-  const subReasonCount = countByField(tickets, 'subReason');
-  const reasonCountEsc = countByField(tickets.filter(t=>t.escalated), 'reason');
-  const reasonCountComp = countByField(tickets.filter(t=>!t.compliant), 'reason');
-
-  renderReasonChart('topReasonsAI', 'topReasonsAITable', reasonCountAI, 'var(--cyan)', 'Top Reasons — AI Handled');
-  renderReasonChart('topSubReasons', 'topSubReasonsTable', subReasonCount, 'var(--purple)', 'Top Sub Reasons — AI Handled');
-  renderReasonChart('topReasonsEsc', 'topReasonsEscTable', reasonCountEsc, 'var(--amber)', 'Top Reasons — Escalated');
-  renderReasonChart('topReasonsComp', 'topReasonsCompTable', reasonCountComp, 'var(--red)', 'Top Reasons — Compliance Failures');
-}
-
-function countByField(tickets, field) {
-  const counts = {};
-  tickets.forEach(t => {
-    const val = t[field] || 'Unknown';
-    counts[val] = (counts[val]||0) + 1;
-  });
-  return Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const aiTickets = [...STATE.filteredTickets.values()].filter(t=>t.isAITicket);
+  const countBy = (arr, field) => {
+    const c={};
+    arr.forEach(t=>{const v=t[field]||'Unknown';c[v]=(c[v]||0)+1;});
+    return Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  };
+  renderReasonChart('topReasonsAI','topReasonsAITable',countBy(aiTickets,'subReason'),'rgba(2,132,199,0.7)','Top Sub Reasons — AI');
+  renderReasonChart('topSubReasons','topSubReasonsTable',countBy(aiTickets,'reason'),'rgba(124,58,237,0.7)','Top Issue Reasons — AI');
+  renderReasonChart('topReasonsEsc','topReasonsEscTable',countBy(aiTickets.filter(t=>t.escalated),'subReason'),'rgba(217,119,6,0.7)','Top Sub Reasons — Escalated');
+  renderReasonChart('topReasonsComp','topReasonsCompTable',countBy(aiTickets.filter(t=>!t.compliant),'subReason'),'rgba(220,38,38,0.7)','Top Sub Reasons — Compliance Failures');
 }
 
 function renderReasonChart(chartId, tableId, data, color, label) {
-  const { textColor, gridColor } = getChartDefaults();
-  const labels = data.map(d=>d[0]);
-  const values = data.map(d=>d[1]);
-
+  const {text,grid} = getChartColors();
   destroyChart(chartId);
   if (document.getElementById(chartId)) {
     STATE.charts[chartId] = new Chart(document.getElementById(chartId), {
       type:'bar',
-      data:{ labels, datasets:[{ label, data:values, backgroundColor:color.replace(')',',0.6)').replace('var(--cyan)','rgba(0,212,255,0.6)').replace('var(--purple)','rgba(155,109,255,0.6)').replace('var(--amber)','rgba(255,185,48,0.6)').replace('var(--red)','rgba(255,77,106,0.6)'), borderRadius:4 }] },
-      options:{
-        indexAxis:'y', responsive:true,
-        plugins:{ legend:{display:false} },
-        scales:{
-          x:{ ticks:{color:textColor,font:{size:10}}, grid:{color:gridColor} },
-          y:{ ticks:{color:textColor,font:{size:10}} }
-        }
-      }
+      data:{labels:data.map(d=>d[0]),datasets:[{label,data:data.map(d=>d[1]),backgroundColor:color,borderRadius:4}]},
+      options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false},tooltip:{backgroundColor:'#fff',titleColor:'#0f172a',bodyColor:'#475569',borderColor:'#e2e8f0',borderWidth:1}},scales:{x:{ticks:{color:text,font:{size:10}},grid:{color:grid}},y:{ticks:{color:text,font:{size:10}}}}}
     });
   }
-
-  const tableEl = document.getElementById(tableId);
-  if (!tableEl) return;
-  if (STATE.datatables[tableId]) { STATE.datatables[tableId].destroy(); tableEl.innerHTML=''; }
-
+  const el = document.getElementById(tableId);
+  if (!el) return;
+  if (STATE.datatables[tableId]) { STATE.datatables[tableId].destroy(); el.innerHTML=''; }
   STATE.datatables[tableId] = $(`#${tableId}`).DataTable({
-    data: data.map((d,i) => ({rank:i+1, name:d[0], count:d[1]})),
-    pageLength:10, dom:'frtip', searching:true, ordering:true,
-    columns:[
-      {title:'#', data:'rank', width:'40px'},
-      {title:'Reason / Sub Reason', data:'name'},
-      {title:'Count', data:'count', render:d=>fmt.num(d)}
-    ]
+    data:data.map((d,i)=>({rank:i+1,name:d[0],count:d[1]})),
+    pageLength:10, dom:'frtip',
+    columns:[{title:'#',data:'rank',width:'40px'},{title:'Reason / Sub Reason',data:'name'},{title:'Count',data:'count',render:d=>fmt.num(d)}]
   });
 }
 
-// ══════════════════════════════════════════════════
-// MASTER TABLE
-// ══════════════════════════════════════════════════
+// ── MASTER TABLE ──
 function renderMasterTable(m) {
   const tickets = [...STATE.filteredTickets.values()];
-
-  if (STATE.datatables.masterTable) {
-    STATE.datatables.masterTable.destroy();
-    document.getElementById('masterTable').innerHTML = '';
-  }
-
+  if (STATE.datatables.masterTable) { STATE.datatables.masterTable.destroy(); document.getElementById('masterTable').innerHTML=''; }
   STATE.datatables.masterTable = $('#masterTable').DataTable({
-    data: tickets,
-    pageLength: 25,
-    dom: 'Bfrtip',
-    buttons: ['csv', 'excel'],
-    scrollX: true,
-    columns: [
-      { title:'OGI', data:'ogi', width:'100px' },
-      { title:'Ticket ID', data:'ticketId', render: d => `<a class="ticket-link" onclick="showTimeline('${d}')">${d}</a>`, width:'110px' },
-      { title:'Date', data:'createdDate', render: d => fmt.date(d) },
-      { title:'Reason', data:'reason', render: d => d || '<span style="color:var(--text-muted)">—</span>' },
-      { title:'Sub Reason', data:'subReason', render: d => d || '<span style="color:var(--text-muted)">—</span>' },
-      { title:'Action Taken', data:'actionTaken', render: d => d || '<span style="color:var(--text-muted)">—</span>' },
-      { title:'AI Ints', data:'aiInteractionCount', width:'60px' },
-      { title:'Human Ints', data:'humanInteractionCount', width:'70px' },
-      { title:'FCR', data:'fcrAchieved', width:'80px', render: d => d ? badge('PASS','green') : badge('FAIL','red') },
-      { title:'Contained', data:'aiContained', width:'90px', render: (d,_,row) => !row.isAITicket ? badge('N/A','muted') : d ? badge('YES','green') : badge('NO','red') },
-      { title:'Compliance', data:'compliant', width:'90px', render: (d,_,row) => !row.isAITicket ? badge('N/A','muted') : d ? badge('PASS','green') : badge('FAIL','red') },
-      { title:'Defect', data:'hasDefect', width:'70px', render: d => d ? badge('YES','red') : badge('No','muted') },
-      { title:'Escalated', data:'escalated', width:'80px', render: (d,_,row) => !row.isAITicket ? badge('N/A','muted') : d ? badge('YES','amber') : badge('No','muted') }
+    data:tickets, pageLength:25, dom:'Bfrtip', buttons:['csv','excel'], scrollX:true,
+    columns:[
+      {title:'OGI',data:'ogi',width:'110px'},
+      {title:'Ticket ID',data:'ticketId',render:d=>`<a class="ticket-link" onclick="showTimeline('${d}')">${d}</a>`,width:'100px'},
+      {title:'Date',data:'createdDate',render:d=>fmt.date(d)},
+      {title:'Vertical',data:'subVertical',render:(d,_,row)=>d||row.vertical||'—'},
+      {title:'Sub Reason',data:'subReason',render:d=>d||'<span style="color:#94a3b8">—</span>'},
+      {title:'Action',data:'actionTaken',render:d=>d||'<span style="color:#94a3b8">—</span>'},
+      {title:'AI',data:'aiInteractionCount',width:'50px'},
+      {title:'Human',data:'humanInteractionCount',width:'60px'},
+      {title:'FCR',data:'fcrAchieved',width:'75px',render:d=>d?badge('PASS','green'):badge('FAIL','red')},
+      {title:'Contained',data:'aiContained',width:'85px',render:(d,_,row)=>!row.isAITicket?badge('N/A','muted'):d?badge('YES','green'):badge('NO','red')},
+      {title:'Compliance',data:'compliant',width:'90px',render:(d,_,row)=>!row.isAITicket?badge('N/A','muted'):d?badge('PASS','green'):badge('FAIL','red')},
+      {title:'Defect',data:'hasDefect',width:'65px',render:d=>d?badge('YES','red'):badge('No','muted')},
+      {title:'Escalated',data:'escalated',width:'80px',render:(d,_,row)=>!row.isAITicket?badge('N/A','muted'):d?badge('YES','amber'):badge('No','muted')}
     ]
   });
 }
 
-// ══════════════════════════════════════════════════
-// TIMELINE VIEW
-// ══════════════════════════════════════════════════
+// ── TIMELINE ──
 function showTimeline(ticketId) {
-  const ticket = STATE.filteredTickets.get(ticketId) || STATE.ticketMap.get(ticketId);
+  const ticket = STATE.filteredTickets.get(String(ticketId)) || STATE.ticketMap.get(String(ticketId));
   if (!ticket) return;
 
   document.getElementById('timelineTicketId').textContent = `Ticket: ${ticketId}`;
-  document.getElementById('timelineTicketMeta').textContent =
-    `OGI: ${ticket.ogi} · ${ticket.interactions.length} interactions · ${ticket.isAITicket?'AI Ticket':'Non-AI'} · FCR: ${ticket.fcrAchieved?'Pass':'Fail'}`;
+  document.getElementById('timelineTicketMeta').textContent = `OGI: ${ticket.ogi} · ${ticket.interactions.length} interactions · FCR: ${ticket.fcrAchieved?'Pass':'Fail'} · ${ticket.subVertical||ticket.vertical||''}`;
 
-  const ints = ticket.interactions;
   const tsCount = {};
-  ints.forEach(i => { const k = i.parsedDate; if(k) tsCount[k]=(tsCount[k]||0)+1; });
+  ticket.interactions.forEach(i => { if (i.parsedDate) tsCount[i.parsedDate]=(tsCount[i.parsedDate]||0)+1; });
+  const aiInts = ticket.interactions.filter(i=>i.type===CONFIG.AI_INTERACTION_TYPE);
 
-  const html = ints.map((int, idx) => {
-    let dotClass = 'internal';
-    if (int.type === CONFIG.AI_INTERACTION_TYPE) dotClass = 'ai';
-    else if (CONFIG.CUSTOMER_FACING.includes(int.type) && int.type !== CONFIG.AI_INTERACTION_TYPE) dotClass = 'human';
-
-    const isDuplicate = int.type === CONFIG.AI_INTERACTION_TYPE && ticket.hasDuplicateAI && ints.filter(i=>i.type===CONFIG.AI_INTERACTION_TYPE).indexOf(int) > 0;
-    const isSameTs = int.parsedDate && tsCount[int.parsedDate] > 1;
-    const isEscalation = idx > 0 && CONFIG.CUSTOMER_FACING.includes(int.type) && int.type !== CONFIG.AI_INTERACTION_TYPE && ticket.escalated;
-
-    if (isDuplicate || isSameTs) dotClass = 'duplicate';
-    if (isEscalation) dotClass = 'escalation';
-
+  const html = ticket.interactions.map((int, idx) => {
+    let dotClass = CONFIG.INTERNAL_TYPES.includes(int.type)?'internal':int.type===CONFIG.AI_INTERACTION_TYPE?'ai':CONFIG.CUSTOMER_FACING.includes(int.type)?'human':'internal';
+    const isDup = int.type===CONFIG.AI_INTERACTION_TYPE && aiInts.indexOf(int)>0;
+    const isSameTs = int.parsedDate && tsCount[int.parsedDate]>1;
+    const isEsc = idx>0 && int.type==='Call' && ticket.escalated;
+    if (isDup||isSameTs) dotClass='duplicate';
+    if (isEsc) dotClass='escalation';
     const flags = [];
-    if (isDuplicate) flags.push(badge('DUPLICATE AI','red'));
+    if (isDup) flags.push(badge('DUPLICATE AI','red'));
     if (isSameTs) flags.push(badge('SAME TIMESTAMP','red'));
-    if (isEscalation) flags.push(badge('ESCALATION','purple'));
+    if (isEsc) flags.push(badge('ESCALATION POINT','purple'));
     if (CONFIG.INTERNAL_TYPES.includes(int.type)) flags.push(badge('INTERNAL','muted'));
-    if (int.type === CONFIG.AI_INTERACTION_TYPE) flags.push(badge('AI','cyan'));
-
-    const missingComp = (!int.reason && ticket.isAITicket) || (!int.subReason && ticket.isAITicket) || (!int.actionTaken && ticket.isAITicket);
-    if (missingComp && ticket.isAITicket) {
-      const missing = [];
-      if (!int.reason) missing.push('Reason');
-      if (!int.subReason) missing.push('Sub Reason');
-      if (!int.actionTaken) missing.push('Action');
-      if (missing.length) flags.push(badge('Missing: '+missing.join(', '),'amber'));
-    }
-
-    return `
-      <div class="tl-item">
-        <div class="tl-dot ${dotClass}"></div>
-        <div class="tl-content">
-          <div class="tl-time">${fmt.datetime(int.createdDate)}</div>
-          <div class="tl-type">${int.type}</div>
-          ${int.reason ? `<div style="font-size:11px;color:var(--text-muted)">Reason: ${int.reason}${int.subReason?' · '+int.subReason:''}</div>` : ''}
-          <div class="tl-flags">${flags.join('')}</div>
-        </div>
-      </div>`;
+    if (int.type===CONFIG.AI_INTERACTION_TYPE) flags.push(badge('AI','cyan'));
+    return `<div class="tl-item"><div class="tl-dot ${dotClass}"></div><div class="tl-content"><div class="tl-time">${fmt.datetime(int.createdDate)}</div><div class="tl-type">${int.type}</div>${int.subReason?`<div style="font-size:11px;color:#64748b">${int.subReason}</div>`:''}<div class="tl-flags">${flags.join('')}</div></div></div>`;
   }).join('');
 
   document.getElementById('timelineBody').innerHTML = `<div class="timeline-list">${html}</div>`;
   document.getElementById('timelineModal').style.display = 'flex';
 }
 
-// ══════════════════════════════════════════════════
-// CEO SUMMARY
-// ══════════════════════════════════════════════════
-function renderCEOSummary(m) {
-  const all = [...STATE.filteredTickets.values()];
-  const aiTickets = all.filter(t => t.isAITicket);
-
-  // Top escalation drivers
-  const escReasons = countByField(aiTickets.filter(t=>t.escalated), 'reason').slice(0,3);
-
-  // Key observations
-  const observations = [];
-  if (m.containmentRate >= 70) observations.push(`AI is effectively containing <strong>${fmt.pct(m.containmentRate)}</strong> of interactions — customers are not requiring human follow-up.`);
-  else observations.push(`AI containment at <strong>${fmt.pct(m.containmentRate)}</strong> — ${fmt.num(m.humanTouch)} tickets required human intervention after AI.`);
-
-  if (m.complianceRate < 90) observations.push(`Compliance rate of <strong>${fmt.pct(m.complianceRate)}</strong> flags ${fmt.num(m.aiTickets - m.compliant)} AI tickets with incomplete reason/action data.`);
-  else observations.push(`Compliance is strong at <strong>${fmt.pct(m.complianceRate)}</strong> — data quality is well-maintained.`);
-
-  if (m.duplicateAITickets > 0) observations.push(`<strong>${fmt.num(m.duplicateAITickets)}</strong> tickets have duplicate AI-Agent Call interactions — potential system defect requiring engineering review.`);
-  else observations.push('No duplicate AI interaction defects detected in this period.');
-
-  if (m.fcrRate < 70) observations.push(`FCR at <strong>${fmt.pct(m.fcrRate)}</strong> is below target — ${fmt.num(aiTickets.filter(t=>!t.fcrAchieved).length)} AI tickets required repeat contacts.`);
-  else observations.push(`FCR rate of <strong>${fmt.pct(m.fcrRate)}</strong> indicates AI is resolving most customer issues in a single interaction.`);
-
-  // Recommendations
-  const recommendations = [];
-  if (m.humanTouchRate > 30) recommendations.push(`Investigate the top escalation drivers (${escReasons.map(e=>e[0]).join(', ')}) to build AI handling scripts and reduce human escalation rate from ${fmt.pct(m.humanTouchRate)}.`);
-  if (m.complianceRate < 95) recommendations.push(`Audit and enforce data entry compliance — ${fmt.num(m.missingReason)} tickets missing Reason, ${fmt.num(m.missingSubReason)} missing Sub Reason, ${fmt.num(m.missingAction)} missing Action Taken.`);
-  if (m.duplicateAITickets > 0) recommendations.push(`Engage engineering to investigate ${fmt.num(m.duplicateAITickets)} duplicate AI interaction patterns — could indicate webhook retry issues or system defects.`);
-  if (m.containmentRate < 70) recommendations.push('Review AI agent training for low-containment reason categories to improve self-service resolution before escalation.');
-  if (recommendations.length < 3) recommendations.push('Continue monitoring weekly FCR and containment trends — establish baseline thresholds for operational alerts.');
-
-  const card = document.getElementById('ceoSummaryCard');
-  const topCompFail = m.missingReason >= m.missingSubReason && m.missingReason >= m.missingAction ? 'Missing Reason' : m.missingSubReason >= m.missingAction ? 'Missing Sub Reason' : 'Missing Action Taken';
-
-  card.innerHTML = `
-    <div class="ceo-content">
-      <div class="ceo-meta-row">
-        <div class="ceo-meta-item"><div class="ceo-meta-label">Records Loaded</div><div class="ceo-meta-val">${fmt.num(STATE.normalizedRows.length)}</div></div>
-        <div class="ceo-meta-item"><div class="ceo-meta-label">Unique OGIs</div><div class="ceo-meta-val">${fmt.num(new Set([...STATE.filteredTickets.values()].map(t=>t.ogi)).size)}</div></div>
-        <div class="ceo-meta-item"><div class="ceo-meta-label">Unique Ticket IDs</div><div class="ceo-meta-val">${fmt.num(STATE.filteredTickets.size)}</div></div>
-        <div class="ceo-meta-item"><div class="ceo-meta-label">AI Tickets Created</div><div class="ceo-meta-val">${fmt.num(m.aiTickets)}</div></div>
-      </div>
-      <div class="ceo-kpi-row">
-        <div class="ceo-kpi-item"><div class="ceo-kpi-label">AI Interactions</div><div class="ceo-kpi-val" style="color:var(--cyan)">${fmt.num(m.aiInteractions)}</div></div>
-        <div class="ceo-kpi-item"><div class="ceo-kpi-label">FCR Rate</div><div class="ceo-kpi-val" style="color:${m.fcrRate>=75?'var(--green)':m.fcrRate>=60?'var(--amber)':'var(--red)'}">${fmt.pct(m.fcrRate)}</div></div>
-        <div class="ceo-kpi-item"><div class="ceo-kpi-label">Containment Rate</div><div class="ceo-kpi-val" style="color:${m.containmentRate>=70?'var(--green)':m.containmentRate>=50?'var(--amber)':'var(--red)'}">${fmt.pct(m.containmentRate)}</div></div>
-        <div class="ceo-kpi-item"><div class="ceo-kpi-label">Human Touch Rate</div><div class="ceo-kpi-val" style="color:${m.humanTouchRate<=30?'var(--green)':m.humanTouchRate<=50?'var(--amber)':'var(--red)'}">${fmt.pct(m.humanTouchRate)}</div></div>
-        <div class="ceo-kpi-item"><div class="ceo-kpi-label">Compliance Rate</div><div class="ceo-kpi-val" style="color:${m.complianceRate>=90?'var(--green)':m.complianceRate>=75?'var(--amber)':'var(--red)'}">${fmt.pct(m.complianceRate)}</div></div>
-      </div>
-      <div class="ceo-sections">
-        <div class="ceo-col">
-          <h4>📊 Top Escalation Drivers</h4>
-          ${escReasons.length ? escReasons.map((e,i)=>`<div class="insight-item"><div class="insight-dot" style="background:var(--amber)"></div><div class="insight-text">${i+1}. <strong>${e[0]}</strong> — ${fmt.num(e[1])} escalations</div></div>`).join('') : '<p style="color:var(--text-muted);font-size:13px">No escalations in period</p>'}
-          <h4 style="margin-top:1rem">🚨 Top Compliance Failure</h4>
-          <div class="insight-item"><div class="insight-dot" style="background:var(--red)"></div><div class="insight-text">${topCompFail} (${fmt.num(Math.max(m.missingReason,m.missingSubReason,m.missingAction))} tickets)</div></div>
-        </div>
-        <div class="ceo-col">
-          <h4>💡 Key Observations</h4>
-          ${observations.map(o=>`<div class="insight-item"><div class="insight-dot"></div><div class="insight-text">${o}</div></div>`).join('')}
-        </div>
-        <div class="ceo-col">
-          <h4>🎯 Recommended Actions</h4>
-          ${recommendations.slice(0,4).map((r,i)=>`<div class="insight-item"><div class="insight-dot" style="background:var(--purple)"></div><div class="insight-text">${i+1}. ${r}</div></div>`).join('')}
-        </div>
-      </div>
-    </div>`;
-}
-
-// ══════════════════════════════════════════════════
-// THEME TOGGLE
-// ══════════════════════════════════════════════════
-function toggleTheme() {
-  const html = document.documentElement;
-  const isDark = html.getAttribute('data-theme') === 'dark';
-  html.setAttribute('data-theme', isDark ? 'light' : 'dark');
-  document.getElementById('themeIcon').className = isDark ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
-  STATE.currentTheme = isDark ? 'light' : 'dark';
-  // Redraw charts if data exists
-  if (STATE.validationPassed && STATE.filteredTickets.size) renderDashboard();
-}
-
-// ══════════════════════════════════════════════════
-// CHART EXPORT
-// ══════════════════════════════════════════════════
-function setupChartExports() {
-  document.querySelectorAll('.btn-chart-export').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      const chartId = btn.getAttribute('data-chart');
-      const chart = STATE.charts[chartId];
-      if (!chart) return;
-      const link = document.createElement('a');
-      link.download = chartId + '.png';
-      link.href = chart.toBase64Image();
-      link.click();
-      showToast('Chart exported as PNG', 'success');
-    });
-  });
-}
-
-// ══════════════════════════════════════════════════
-// PDF EXPORT
-// ══════════════════════════════════════════════════
-function exportPDF() {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
-
-  const m = computeMetrics(STATE.filteredTickets);
-  const now = new Date().toLocaleDateString('en-GB');
-
-  doc.setFillColor(8,14,26);
-  doc.rect(0,0,210,40,'F');
-  doc.setTextColor(0,212,255);
-  doc.setFontSize(18);
-  doc.setFont('helvetica','bold');
-  doc.text('Way-Decagon AI Effectiveness & Quality', 15, 18);
-  doc.setFontSize(10);
-  doc.setTextColor(122,149,184);
-  doc.text(`Executive Dashboard Export · ${now}`, 15, 28);
-  doc.setTextColor(0,229,150);
-  doc.text(`Records: ${fmt.num(STATE.normalizedRows.length)} · AI Tickets: ${fmt.num(m.aiTickets)}`, 15, 36);
-
-  let y = 55;
-  doc.setTextColor(30,30,30);
-  doc.setFontSize(13); doc.setFont('helvetica','bold');
-  doc.text('Executive KPI Summary', 15, y); y+=10;
-
-  const rows = [
-    ['AI Tickets Created', fmt.num(m.aiTickets)],
-    ['AI Agent Interactions', fmt.num(m.aiInteractions)],
-    ['AI FCR Rate', fmt.pct(m.fcrRate)],
-    ['AI Containment Rate', fmt.pct(m.containmentRate)],
-    ['Human Touch Rate', fmt.pct(m.humanTouchRate)],
-    ['Escalated to Human', fmt.num(m.escalated)],
-    ['Compliance Rate', fmt.pct(m.complianceRate)],
-    ['Duplicate AI Tickets', fmt.num(m.duplicateAITickets)],
-    ['Same Timestamp Defects', fmt.num(m.sameTimestampDefects)]
-  ];
-
-  doc.autoTable({
-    startY: y, head:[['KPI','Value']],
-    body: rows, margin:{left:15,right:15},
-    headStyles:{fillColor:[8,14,26],textColor:[0,212,255],fontSize:10},
-    bodyStyles:{fontSize:10},
-    alternateRowStyles:{fillColor:[240,244,248]}
-  });
-
-  doc.save(`way_decagon_dashboard_${now.replace(/\//g,'-')}.pdf`);
-  showToast('PDF exported', 'success');
-}
-
-// ══════════════════════════════════════════════════
-// EXPORT SUMMARY
-// ══════════════════════════════════════════════════
-function exportSummaryText() {
-  if (!STATE.filteredTickets.size) return;
-  const m = computeMetrics(STATE.filteredTickets);
-  const escReasons = countByField([...STATE.filteredTickets.values()].filter(t=>t.isAITicket&&t.escalated),'reason').slice(0,3);
-
-  const text = `WAY-DECAGON EXECUTIVE SUMMARY
-Generated: ${new Date().toLocaleString()}
-${'='.repeat(50)}
-
-DATA RECONCILIATION
-Records Loaded: ${fmt.num(STATE.normalizedRows.length)}
-Unique OGIs: ${fmt.num(new Set([...STATE.filteredTickets.values()].map(t=>t.ogi)).size)}
-Unique Ticket IDs: ${fmt.num(STATE.filteredTickets.size)}
-
-AI PERFORMANCE METRICS
-AI Tickets Created: ${fmt.num(m.aiTickets)}
-AI Agent Interactions: ${fmt.num(m.aiInteractions)}
-AI FCR Rate: ${fmt.pct(m.fcrRate)}
-AI Containment Rate: ${fmt.pct(m.containmentRate)}
-Human Touch Rate: ${fmt.pct(m.humanTouchRate)}
-Escalated to Human: ${fmt.num(m.escalated)}
-
-COMPLIANCE
-Compliance Rate: ${fmt.pct(m.complianceRate)}
-Missing Reason: ${fmt.num(m.missingReason)}
-Missing Sub Reason: ${fmt.num(m.missingSubReason)}
-Missing Action Taken: ${fmt.num(m.missingAction)}
-
-SYSTEM DEFECTS
-Duplicate AI Tickets: ${fmt.num(m.duplicateAITickets)}
-Same Timestamp Defects: ${fmt.num(m.sameTimestampDefects)}
-Short Interval Defects: ${fmt.num(m.shortIntervalDefects)}
-
-TOP ESCALATION DRIVERS
-${escReasons.map((e,i)=>`${i+1}. ${e[0]} — ${fmt.num(e[1])} escalations`).join('\n')}
-`;
-
-  const blob = new Blob([text], {type:'text/plain'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'way_decagon_executive_summary.txt';
-  a.click(); URL.revokeObjectURL(url);
-  showToast('Executive summary exported', 'success');
-}
-
-// ══════════════════════════════════════════════════
-// REASON TABS
-// ══════════════════════════════════════════════════
-function setupReasonTabs() {
-  document.querySelectorAll('.reason-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.reason-tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.reason-panel').forEach(p => p.classList.remove('active'));
-      tab.classList.add('active');
-      const panel = document.getElementById('rp-' + tab.dataset.rt);
-      if (panel) panel.classList.add('active');
-    });
-  });
-}
-
-// ══════════════════════════════════════════════════
-// COMPLIANCE DRILL-DOWN
-// ══════════════════════════════════════════════════
+// ── COMPLIANCE DRILLS ──
 function setupComplianceDrills() {
   document.querySelectorAll('.clickable-drill').forEach(el => {
-    el.addEventListener('click', () => {
+    el.onclick = () => {
       const drill = el.dataset.drill;
       const tickets = [...STATE.filteredTickets.values()].filter(t => {
         if (!t.isAITicket) return false;
-        if (drill === 'missingReason') return t.missingReason;
-        if (drill === 'missingSubReason') return t.missingSubReason;
-        if (drill === 'missingAction') return t.missingAction;
+        if (drill==='missingReason') return t.missingReason;
+        if (drill==='missingSubReason') return t.missingSubReason;
+        if (drill==='missingAction') return t.missingAction;
         return false;
       });
-
       const wrap = document.getElementById('complianceDrillWrap');
-      document.getElementById('compDrillTitle').textContent = `${el.previousElementSibling?.textContent} — ${fmt.num(tickets.length)} tickets`;
-
-      if (STATE.datatables.compDrillTable) {
-        STATE.datatables.compDrillTable.destroy();
-        document.getElementById('compDrillTable').innerHTML = '';
-      }
-
+      document.getElementById('compDrillTitle').textContent = `${el.previousElementSibling?.textContent||'Drill'} — ${fmt.num(tickets.length)} tickets`;
+      if (STATE.datatables.compDrillTable) { STATE.datatables.compDrillTable.destroy(); document.getElementById('compDrillTable').innerHTML=''; }
       STATE.datatables.compDrillTable = $('#compDrillTable').DataTable({
-        data: tickets, pageLength:10, dom:'Bfrtip', buttons:['csv'],
+        data:tickets, pageLength:10, dom:'Bfrtip', buttons:['csv'],
         columns:[
-          {title:'Ticket ID', data:'ticketId', render:d=>`<span class="ticket-link" onclick="showTimeline('${d}')">${d}</span>`},
-          {title:'OGI', data:'ogi'},
-          {title:'Date', data:'createdDate', render:d=>fmt.date(d)},
-          {title:'Reason', data:'reason', render:d=>d||badge('MISSING','red')},
-          {title:'Sub Reason', data:'subReason', render:d=>d||badge('MISSING','red')},
-          {title:'Action Taken', data:'actionTaken', render:d=>d||badge('MISSING','red')}
+          {title:'Ticket ID',data:'ticketId',render:d=>`<span class="ticket-link" onclick="showTimeline('${d}')">${d}</span>`},
+          {title:'OGI',data:'ogi'},
+          {title:'Date',data:'createdDate',render:d=>fmt.date(d)},
+          {title:'Sub Reason',data:'subReason',render:d=>d||badge('MISSING','red')},
+          {title:'Action Taken',data:'actionTaken',render:d=>d||badge('MISSING','red')}
         ]
       });
-
       wrap.style.display='block';
-      wrap.scrollIntoView({behavior:'smooth', block:'start'});
-    });
+      wrap.scrollIntoView({behavior:'smooth',block:'start'});
+    };
   });
+  document.getElementById('closeCompDrill').onclick = () => { document.getElementById('complianceDrillWrap').style.display='none'; };
+}
 
-  document.getElementById('closeCompDrill').addEventListener('click', () => {
-    document.getElementById('complianceDrillWrap').style.display='none';
+// ── CEO SUMMARY ──
+function renderCEOSummary(m) {
+  const aiTickets = [...STATE.filteredTickets.values()].filter(t=>t.isAITicket);
+  const countBy = (arr,field) => { const c={}; arr.forEach(t=>{const v=t[field]||'Unknown';c[v]=(c[v]||0)+1;}); return Object.entries(c).sort((a,b)=>b[1]-a[1]); };
+  const escReasons = countBy(aiTickets.filter(t=>t.escalated),'subReason').slice(0,3);
+
+  const obs = [];
+  if (m.containmentRate>=70) obs.push(`AI is containing <strong>${fmt.pct(m.containmentRate)}</strong> of tickets without human intervention.`);
+  else obs.push(`AI containment at <strong>${fmt.pct(m.containmentRate)}</strong> — ${fmt.num(m.humanTouch)} tickets needed human follow-up.`);
+  if (m.complianceRate<90) obs.push(`Compliance at <strong>${fmt.pct(m.complianceRate)}</strong> — ${fmt.num(m.aiTickets-m.compliant)} AI tickets have incomplete data fields.`);
+  else obs.push(`Compliance strong at <strong>${fmt.pct(m.complianceRate)}</strong>.`);
+  if (m.duplicateAITickets>0) obs.push(`<strong>${fmt.num(m.duplicateAITickets)}</strong> duplicate AI interaction tickets detected — potential system defect.`);
+  if (m.fcrRate<70) obs.push(`FCR at <strong>${fmt.pct(m.fcrRate)}</strong> — ${fmt.num(aiTickets.filter(t=>!t.fcrAchieved).length)} AI tickets had repeat customer contacts.`);
+  else obs.push(`FCR at <strong>${fmt.pct(m.fcrRate)}</strong> — strong first-contact resolution.`);
+
+  const recs = [];
+  if (m.humanTouchRate>30) recs.push(`Analyse top escalation drivers (${escReasons.map(e=>e[0]).slice(0,2).join(', ')}) — build AI scripts to reduce ${fmt.pct(m.humanTouchRate)} human touch rate.`);
+  if (m.complianceRate<95) recs.push(`Enforce compliance tagging — ${fmt.num(m.missingSubReason)} tickets missing Sub Reason, ${fmt.num(m.missingAction)} missing Action.`);
+  if (m.duplicateAITickets>0) recs.push(`Engage Engineering on ${fmt.num(m.duplicateAITickets)} duplicate AI ticket patterns — likely webhook/retry issue.`);
+  if (recs.length<3) recs.push('Establish weekly FCR and containment rate baselines for ongoing AI performance monitoring.');
+
+  const topFail = m.missingSubReason>=m.missingReason&&m.missingSubReason>=m.missingAction?`Missing Sub Reason (${fmt.num(m.missingSubReason)})`:m.missingReason>=m.missingAction?`Missing Reason (${fmt.num(m.missingReason)})`:`Missing Action (${fmt.num(m.missingAction)})`;
+  const kpiColor = (v,good,mid) => v>=good?'#059669':v>=mid?'#d97706':'#dc2626';
+
+  document.getElementById('ceoSummaryCard').innerHTML = `<div class="ceo-content">
+    <div class="ceo-meta-row">
+      <div class="ceo-meta-item"><div class="ceo-meta-label">Records Loaded</div><div class="ceo-meta-val">${fmt.num(STATE.rawRows.length)}</div></div>
+      <div class="ceo-meta-item"><div class="ceo-meta-label">Unique OGIs</div><div class="ceo-meta-val">${fmt.num(new Set([...STATE.filteredTickets.values()].map(t=>t.ogi)).size)}</div></div>
+      <div class="ceo-meta-item"><div class="ceo-meta-label">Unique Ticket IDs</div><div class="ceo-meta-val">${fmt.num(STATE.filteredTickets.size)}</div></div>
+      <div class="ceo-meta-item"><div class="ceo-meta-label">AI Tickets</div><div class="ceo-meta-val">${fmt.num(m.aiTickets)}</div></div>
+    </div>
+    <div class="ceo-kpi-row">
+      <div class="ceo-kpi-item"><div class="ceo-kpi-label">AI Interactions</div><div class="ceo-kpi-val" style="color:#7c3aed">${fmt.num(m.aiInteractions)}</div></div>
+      <div class="ceo-kpi-item"><div class="ceo-kpi-label">FCR Rate</div><div class="ceo-kpi-val" style="color:${kpiColor(m.fcrRate,75,60)}">${fmt.pct(m.fcrRate)}</div></div>
+      <div class="ceo-kpi-item"><div class="ceo-kpi-label">Containment Rate</div><div class="ceo-kpi-val" style="color:${kpiColor(m.containmentRate,70,50)}">${fmt.pct(m.containmentRate)}</div></div>
+      <div class="ceo-kpi-item"><div class="ceo-kpi-label">Human Touch Rate</div><div class="ceo-kpi-val" style="color:${m.humanTouchRate<=30?'#059669':m.humanTouchRate<=50?'#d97706':'#dc2626'}">${fmt.pct(m.humanTouchRate)}</div></div>
+      <div class="ceo-kpi-item"><div class="ceo-kpi-label">Compliance Rate</div><div class="ceo-kpi-val" style="color:${kpiColor(m.complianceRate,90,75)}">${fmt.pct(m.complianceRate)}</div></div>
+    </div>
+    <div class="ceo-sections">
+      <div class="ceo-col">
+        <h4>📊 Top Escalation Drivers</h4>
+        ${escReasons.length?escReasons.map((e,i)=>`<div class="insight-item"><div class="insight-dot" style="background:#d97706"></div><div class="insight-text">${i+1}. <strong>${e[0]}</strong> — ${fmt.num(e[1])}</div></div>`).join(''):'<p style="font-size:12px;color:#64748b">No escalations in period</p>'}
+        <h4 style="margin-top:1rem">🚨 Top Compliance Failure</h4>
+        <div class="insight-item"><div class="insight-dot" style="background:#dc2626"></div><div class="insight-text">${topFail}</div></div>
+      </div>
+      <div class="ceo-col">
+        <h4>💡 Key Observations</h4>
+        ${obs.map(o=>`<div class="insight-item"><div class="insight-dot"></div><div class="insight-text">${o}</div></div>`).join('')}
+      </div>
+      <div class="ceo-col">
+        <h4>🎯 Recommended Actions</h4>
+        ${recs.map((r,i)=>`<div class="insight-item"><div class="insight-dot" style="background:#7c3aed"></div><div class="insight-text">${i+1}. ${r}</div></div>`).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── PDF EXPORT ──
+function exportPDF() {
+  if (!STATE.filteredTickets.size) { showToast('Upload data first','error'); return; }
+  const {jsPDF} = window.jspdf;
+  const doc = new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const m = computeMetrics(STATE.filteredTickets);
+  const now = new Date().toLocaleDateString('en-GB');
+  doc.setFillColor(15,23,42); doc.rect(0,0,210,35,'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(16); doc.setFont('helvetica','bold');
+  doc.text('Way-Decagon AI Effectiveness & Quality Dashboard',15,16);
+  doc.setFontSize(9); doc.setTextColor(148,163,184);
+  doc.text(`Executive Export · ${now} · Records: ${fmt.num(STATE.rawRows.length)}`,15,26);
+  let y=48;
+  doc.setTextColor(15,23,42); doc.setFontSize(12); doc.text('Executive KPI Summary',15,y); y+=8;
+  doc.autoTable({startY:y,head:[['KPI','Value']],body:[
+    ['AI Tickets Created',fmt.num(m.aiTickets)],['AI Agent Interactions',fmt.num(m.aiInteractions)],
+    ['AI FCR Rate',fmt.pct(m.fcrRate)],['AI Containment Rate',fmt.pct(m.containmentRate)],
+    ['Human Touch Rate',fmt.pct(m.humanTouchRate)],['Escalated to Human',fmt.num(m.escalated)],
+    ['Compliance Rate',fmt.pct(m.complianceRate)],['Compliance Failures',fmt.num(m.aiTickets-m.compliant)],
+    ['Duplicate AI Tickets',fmt.num(m.duplicateAITickets)]
+  ],margin:{left:15,right:15},headStyles:{fillColor:[15,23,42],textColor:[255,255,255],fontSize:9},bodyStyles:{fontSize:9}});
+  doc.save(`way_decagon_${now.replace(/\//g,'-')}.pdf`);
+  showToast('PDF exported','success');
+}
+
+function exportSummary() {
+  if (!STATE.filteredTickets.size) return;
+  const m = computeMetrics(STATE.filteredTickets);
+  const text = `WAY-DECAGON EXECUTIVE SUMMARY\nGenerated: ${new Date().toLocaleString()}\n${'='.repeat(50)}\nAI Tickets: ${fmt.num(m.aiTickets)}\nFCR Rate: ${fmt.pct(m.fcrRate)}\nContainment Rate: ${fmt.pct(m.containmentRate)}\nHuman Touch Rate: ${fmt.pct(m.humanTouchRate)}\nCompliance Rate: ${fmt.pct(m.complianceRate)}\nDuplicate AI Tickets: ${fmt.num(m.duplicateAITickets)}\n`;
+  const blob = new Blob([text],{type:'text/plain'});
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='way_decagon_summary.txt'; a.click();
+  showToast('Summary exported','success');
+}
+
+// ── REASON TABS ──
+function setupReasonTabs() {
+  document.querySelectorAll('.reason-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.reason-tab').forEach(t=>t.classList.remove('active'));
+      document.querySelectorAll('.reason-panel').forEach(p=>p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('rp-'+tab.dataset.rt)?.classList.add('active');
+    });
   });
 }
 
-// ══════════════════════════════════════════════════
-// NAV SCROLL SPY
-// ══════════════════════════════════════════════════
+// ── SCROLL SPY ──
 function setupScrollSpy() {
   const sections = document.querySelectorAll('.dash-section');
   const navLinks = document.querySelectorAll('.nav-link');
-
-  const observer = new IntersectionObserver(entries => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        const id = entry.target.id.replace('section-','');
-        navLinks.forEach(link => {
-          link.classList.toggle('active', link.dataset.section === id);
-        });
-      }
-    });
-  }, { threshold: 0.3 });
-
-  sections.forEach(s => observer.observe(s));
+  new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) { const id=e.target.id.replace('section-',''); navLinks.forEach(l=>l.classList.toggle('active',l.dataset.section===id)); } });
+  },{threshold:0.3}).observe || sections.forEach(s => new IntersectionObserver(entries => entries.forEach(e=>{if(e.isIntersecting){const id=e.target.id.replace('section-','');navLinks.forEach(l=>l.classList.toggle('active',l.dataset.section===id));}}),{threshold:0.3}).observe(s));
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) { const id=e.target.id.replace('section-',''); navLinks.forEach(l=>l.classList.toggle('active',l.dataset.section===id)); }});
+  },{threshold:0.3});
+  sections.forEach(s=>obs.observe(s));
 }
 
-// ══════════════════════════════════════════════════
-// DEFECT RECALC
-// ══════════════════════════════════════════════════
-function setupDefectRecalc() {
-  document.getElementById('recalcDefectsBtn').addEventListener('click', () => {
-    const threshold = parseInt(document.getElementById('defectThreshold').value) || 60;
-    CONFIG.DEFECT_THRESHOLD_SEC = threshold;
-    // Re-enrich all tickets
-    STATE.ticketMap.forEach(ticket => enrichTicket(ticket));
-    STATE.filteredTickets.forEach(ticket => enrichTicket(ticket));
-    const m = computeMetrics(STATE.filteredTickets);
-    renderDefectSection(m);
-    showToast(`Defect threshold updated to ${threshold}s`, 'info');
-  });
-}
-
-// ══════════════════════════════════════════════════
-// INIT
-// ══════════════════════════════════════════════════
+// ── INIT ──
 document.addEventListener('DOMContentLoaded', () => {
   setupUpload();
   setupReasonTabs();
   setupScrollSpy();
-  setupDefectRecalc();
 
-  // Theme toggle
-  document.getElementById('themeToggle').addEventListener('click', toggleTheme);
-
-  // PDF export
   document.getElementById('exportPdfBtn').addEventListener('click', exportPDF);
-  document.getElementById('exportSummaryBtn').addEventListener('click', exportSummaryText);
-
-  // Filters
+  document.getElementById('exportSummaryBtn').addEventListener('click', exportSummary);
   document.getElementById('applyFilterBtn').addEventListener('click', applyFilters);
   document.getElementById('clearFilterBtn').addEventListener('click', clearFilters);
-
-  // Timeline modal close
-  document.getElementById('closeTimelineModal').addEventListener('click', () => {
-    document.getElementById('timelineModal').style.display='none';
+  document.getElementById('closeTimelineModal').addEventListener('click', ()=>{ document.getElementById('timelineModal').style.display='none'; });
+  document.getElementById('timelineModal').addEventListener('click', e=>{ if(e.target===document.getElementById('timelineModal')) document.getElementById('timelineModal').style.display='none'; });
+  document.getElementById('closeDrillModal').addEventListener('click', ()=>{ document.getElementById('drillModal').style.display='none'; });
+  document.getElementById('recalcDefectsBtn').addEventListener('click', () => {
+    CONFIG.DEFECT_THRESHOLD_SEC = parseInt(document.getElementById('defectThreshold').value)||60;
+    STATE.ticketMap.forEach(enrichTicket);
+    STATE.filteredTickets.forEach(enrichTicket);
+    renderDefectSection(computeMetrics(STATE.filteredTickets));
+    showToast(`Threshold updated to ${CONFIG.DEFECT_THRESHOLD_SEC}s`,'info');
   });
-  document.getElementById('timelineModal').addEventListener('click', e => {
-    if (e.target === document.getElementById('timelineModal'))
-      document.getElementById('timelineModal').style.display='none';
-  });
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape'){document.getElementById('timelineModal').style.display='none';document.getElementById('drillModal').style.display='none';}});
 
-  // Drill modal close
-  document.getElementById('closeDrillModal').addEventListener('click', () => {
-    document.getElementById('drillModal').style.display='none';
-  });
-
-  // Chart exports (set up after DOM ready)
-  setupChartExports();
-
-  // Setup compliance drills after initial load
-  document.getElementById('section-compliance').addEventListener('click', () => {
-    setupComplianceDrills();
-  });
-
-  // Keyboard ESC closes modals
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') {
-      document.getElementById('timelineModal').style.display='none';
-      document.getElementById('drillModal').style.display='none';
-    }
+  document.querySelectorAll('.btn-chart-export').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const chart = STATE.charts[btn.dataset.chart];
+      if (!chart) return;
+      const a=document.createElement('a'); a.download=btn.dataset.chart+'.png'; a.href=chart.toBase64Image(); a.click();
+      showToast('Chart saved as PNG','success');
+    });
   });
 
-  showToast('Way-Decagon Dashboard ready — upload CSV or load sample data', 'info', 5000);
+  showToast('Dashboard ready — upload your CS All Tickets XLSX or CSV','info',5000);
 });
 
-// Expose for inline calls
 window.showTimeline = showTimeline;
