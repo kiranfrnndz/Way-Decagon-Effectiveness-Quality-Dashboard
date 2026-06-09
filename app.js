@@ -6,8 +6,7 @@ const CONFIG = {
   INTERNAL: ['TL Review','Manager Review','QC Audit','Select','User Reviews','BBB Reviews','App Feedback','Escalation Handled by TL','Escalation handled by Escalation Team','Escalation handled by Manager','Escalation handled by Ops Team'],
   CUSTOMER_FACING: ['AI-Agent Call','Call','Email','Chat','SMS'],
   EXCLUDED_REASONS: ['escalated','non escalated','not escalated',''],
-  DEFECT_THRESHOLD_SEC: 60,
-  MIN_DATE: '2026-05-19'
+  DEFECT_THRESHOLD_SEC: 60
 };
 
 const STATE = {
@@ -134,9 +133,15 @@ function enrichTicket(tk){
   const r=(tk.reason||'').trim();
   tk.displayReason=(!excluded.includes(sr.toLowerCase())&&sr)?sr:(!excluded.includes(r.toLowerCase())&&r)?r:'';
 
-  if(tk.createdDate){
+  // Use AI-Agent Call interaction date as the date bucket
+  // Customer can call at any time after ticket creation
+  const firstAIDate = firstAI ? new Date(firstAI.createdDate) : null;
+  if(firstAIDate&&!isNaN(firstAIDate)){
+    tk.aiInteractionDate = firstAIDate.toISOString().slice(0,10);
+    tk.dateBucket = tk.aiInteractionDate;
+  } else if(tk.createdDate){
     const d=new Date(tk.createdDate);
-    if(!isNaN(d)&&d.toISOString().slice(0,10)>=CONFIG.MIN_DATE)tk.dateBucket=d.toISOString().slice(0,10);
+    if(!isNaN(d)) tk.dateBucket=d.toISOString().slice(0,10);
   }
 }
 
@@ -380,7 +385,12 @@ function dChart(id){if(STATE.charts[id]){STATE.charts[id].destroy();delete STATE
 function getCC(){return{text:'#64748b',grid:'#e2e8f0'};}
 function getDateBuckets(ticketMap){
   const b=new Map();
-  ticketMap.forEach(t=>{if(t.dateBucket){if(!b.has(t.dateBucket))b.set(t.dateBucket,[]);b.get(t.dateBucket).push(t);}});
+  ticketMap.forEach(t=>{
+    if(t.isDecagonTicket&&t.dateBucket){
+      if(!b.has(t.dateBucket))b.set(t.dateBucket,[]);
+      b.get(t.dateBucket).push(t);
+    }
+  });
   return new Map([...b.entries()].sort((a,b)=>a[0].localeCompare(b[0])));
 }
 
@@ -736,8 +746,10 @@ function applyDateFilter(){
   const from=document.getElementById('globalDateFrom').value,to=document.getElementById('globalDateTo').value;
   STATE.filteredTickets=new Map();
   STATE.ticketMap.forEach((tk,id)=>{
-    if(from){const d=new Date(tk.createdDate);if(!isNaN(d)&&d<new Date(from))return;}
-    if(to){const d=new Date(tk.createdDate);if(!isNaN(d)&&d>new Date(to+'T23:59:59'))return;}
+    // Use AI interaction date for filtering if available, else ticket created date
+    const filterDate = tk.aiInteractionDate || tk.createdDate;
+    if(from){const d=new Date(filterDate);if(!isNaN(d)&&d<new Date(from))return;}
+    if(to){const d=new Date(filterDate);if(!isNaN(d)&&d>new Date(to+'T23:59:59'))return;}
     STATE.filteredTickets.set(id,tk);
   });
   renderDashboard();showToast('Filter applied — '+fmt.num(STATE.filteredTickets.size)+' tickets','info');
