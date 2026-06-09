@@ -93,8 +93,8 @@ function enrichTicket(tk){
   const aiInts=ints.filter(i=>i.type===CONFIG.AI_TYPE);
   const humanInts=cf.filter(i=>i.type!==CONFIG.AI_TYPE);
   const firstAI=aiInts.length>0?aiInts[0]:null;
-  const humanBeforeAI=humanInts.some(i=>(i.parsedDate||0)<(firstAI?firstAI.parsedDate||0:Infinity));
-  tk.isDecagonTicket=firstAI!==null&&!humanBeforeAI;
+  // Decagon ticket = any ticket with at least one AI-Agent Call interaction
+  tk.isDecagonTicket=firstAI!==null;
   tk.aiInteractionCount=aiInts.length;
   tk.humanInteractionCount=humanInts.length;
   tk.internalInteractionCount=ints.filter(i=>CONFIG.INTERNAL.includes(i.type)).length;
@@ -102,11 +102,18 @@ function enrichTicket(tk){
 
   if(tk.isDecagonTicket){
     const humanAfterAI=humanInts.filter(i=>(i.parsedDate||0)>(firstAI.parsedDate||0));
+    const humanBeforeAI=humanInts.filter(i=>(i.parsedDate||0)<(firstAI.parsedDate||0));
     tk.csAssisted=humanAfterAI.length>0;
     tk.decagonOnly=humanAfterAI.length===0;
-    // Containment = no CS after AI
     tk.decagonContained=humanAfterAI.length===0;
-  }else{tk.csAssisted=tk.decagonOnly=tk.decagonContained=false;}
+    // Re-contact analysis: was there a human interaction BEFORE AI?
+    tk.isRecontact=humanBeforeAI.length>0;
+    tk.recontactResolvedByDecagon=tk.isRecontact&&humanAfterAI.length===0&&tk.status.toLowerCase()==='closed';
+    tk.recontactReescalated=tk.isRecontact&&humanAfterAI.length>0;
+  }else{
+    tk.csAssisted=tk.decagonOnly=tk.decagonContained=false;
+    tk.isRecontact=tk.recontactResolvedByDecagon=tk.recontactReescalated=false;
+  }
 
   // Compliance base: Decagon-only tickets (no CS)
   if(tk.isDecagonTicket&&tk.decagonOnly){
@@ -162,6 +169,12 @@ function computeMetrics(ticketMap){
   const pendingStatus=decOnly.filter(t=>t.pendingStatus).length;
   const sameTimestampInts=dec.reduce((s,t)=>s+t.sameTimestampInteractions,0);
   const shortIntervalInts=[...ticketMap.values()].filter(t=>t.shortIntervalFlag).length;
+  // Re-contact metrics
+  const recontactTickets=dec.filter(t=>t.isRecontact);
+  const recontactCount=recontactTickets.length;
+  const recontactResolved=dec.filter(t=>t.recontactResolvedByDecagon).length;
+  const recontactReescalated=dec.filter(t=>t.recontactReescalated).length;
+  const recontactStillOpen=recontactTickets.filter(t=>!t.recontactResolvedByDecagon&&!t.recontactReescalated).length;
 
   // Duplicate tickets: same OGI + different ticket ID + same timestamp
   const ogiTimestampMap={};
@@ -197,6 +210,7 @@ function computeMetrics(ticketMap){
     complianceFailures:decOnlyCount-compliantCount,
     missingReason,missingSubReason,statusNotClosed,pendingStatus,
     sameTimestampInts,shortIntervalInts,dupTicketCount,
+    recontactCount,recontactResolved,recontactReescalated,recontactStillOpen,recontactTickets,
     all,dec,decOnly
   };
 }
@@ -316,11 +330,85 @@ function processRows(rows,filename){
   },50);
 }
 
+// ── RE-CONTACT TAB ──
+function renderRecontactTab(m){
+  const colorMap={cyan:{a:'var(--cyan)',d:'var(--cyan-dim)'},green:{a:'var(--green)',d:'var(--green-dim)'},amber:{a:'var(--amber)',d:'var(--amber-dim)'},red:{a:'var(--red)',d:'var(--red-dim)'}};
+  const kpis=[
+    {label:'Re-contact Calls Handled by Decagon',mainVal:fmt.num(m.recontactCount),subVal:fmt.pct(pct(m.recontactCount,m.decagonTickets))+' of Decagon calls',icon:'fa-phone-arrow-up-right',color:'cyan',tip:'Tickets where customer had a human interaction before Decagon handled a follow-up call',lvl:'Ticket'},
+    {label:'Resolved by Decagon',mainVal:fmt.num(m.recontactResolved),subVal:m.recontactCount?fmt.pct(pct(m.recontactResolved,m.recontactCount)):'0%',icon:'fa-circle-check',color:'green',tip:'Re-contact calls where Decagon resolved it — no further human involvement and ticket closed',lvl:'Ticket'},
+    {label:'Re-escalated to CS',mainVal:fmt.num(m.recontactReescalated),subVal:m.recontactCount?fmt.pct(pct(m.recontactReescalated,m.recontactCount)):'0%',icon:'fa-person-walking-arrow-right',color:'amber',tip:'Re-contact calls where human CS agent had to step in again after Decagon',lvl:'Ticket'},
+    {label:'Still Open / Unresolved',mainVal:fmt.num(m.recontactStillOpen),subVal:m.recontactCount?fmt.pct(pct(m.recontactStillOpen,m.recontactCount)):'0%',icon:'fa-clock',color:'red',tip:'Re-contact calls handled by Decagon but ticket still not closed',lvl:'Ticket'}
+  ];
+
+  const grid=document.getElementById('recontactKpiGrid');
+  if(!grid)return;
+  grid.innerHTML=kpis.map(k=>{
+    const c=colorMap[k.color]||colorMap.cyan;
+    return`<div class="kpi-card" style="--ac:${c.a};--acd:${c.d}">
+      <div class="kpi-tip" title="${k.tip}"><i class="fa-solid fa-circle-info"></i></div>
+      <div class="kpi-icon"><i class="fa-solid ${k.icon}"></i></div>
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-val-large">${k.mainVal}</div>
+      <div class="kpi-val-small">${k.subVal}</div>
+      <div class="kpi-lvl">${k.lvl} Level</div>
+    </div>`;
+  }).join('');
+
+  // Reason charts
+  const resolvedReasons=countByReason(m.recontactTickets.filter(t=>t.recontactResolvedByDecagon));
+  const escalatedReasons=countByReason(m.recontactTickets.filter(t=>t.recontactReescalated));
+  const{text,grid:gridColor}=getCC();
+
+  dChart('recontactResolvedChart');
+  if(document.getElementById('recontactResolvedChart')){
+    if(resolvedReasons.length){
+      STATE.charts.recontactResolvedChart=new Chart(document.getElementById('recontactResolvedChart'),{
+        type:'bar',data:{labels:resolvedReasons.map(d=>d[0]),datasets:[{label:'Resolved Calls',data:resolvedReasons.map(d=>d[1]),backgroundColor:'rgba(5,150,105,0.7)',borderRadius:4}]},
+        options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{color:text,font:{size:10}},grid:{color:gridColor}},y:{ticks:{color:text,font:{size:10}}}}}
+      });
+    } else {
+      document.getElementById('recontactResolvedChart').parentElement.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:200px;color:#94a3b8;flex-direction:column;gap:0.5rem"><i class="fa-solid fa-chart-bar" style="font-size:2rem"></i><p style="font-size:13px">No re-contact resolved data in selected period</p></div>';
+    }
+  }
+
+  dChart('recontactEscalatedChart');
+  if(document.getElementById('recontactEscalatedChart')){
+    if(escalatedReasons.length){
+      STATE.charts.recontactEscalatedChart=new Chart(document.getElementById('recontactEscalatedChart'),{
+        type:'bar',data:{labels:escalatedReasons.map(d=>d[0]),datasets:[{label:'Re-escalated Calls',data:escalatedReasons.map(d=>d[1]),backgroundColor:'rgba(217,119,6,0.7)',borderRadius:4}]},
+        options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{color:text,font:{size:10}},grid:{color:gridColor}},y:{ticks:{color:text,font:{size:10}}}}}
+      });
+    } else {
+      document.getElementById('recontactEscalatedChart').parentElement.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:200px;color:#94a3b8;flex-direction:column;gap:0.5rem"><i class="fa-solid fa-chart-bar" style="font-size:2rem"></i><p style="font-size:13px">No re-escalated data in selected period</p></div>';
+    }
+  }
+
+  // Table
+  if(STATE.datatables.recontactTable){STATE.datatables.recontactTable.destroy();document.getElementById('recontactTable').innerHTML='';}
+  if(document.getElementById('recontactTable')){
+    STATE.datatables.recontactTable=$('#recontactTable').DataTable({
+      data:m.recontactTickets,pageLength:25,dom:'Bfrtip',buttons:['csv','excel'],scrollX:true,
+      columns:[
+        {title:'Ticket ID',data:'ticketId',render:d=>`<a class="ticket-link" onclick="showTimeline('${d}')">${d}</a>`},
+        {title:'OGI',data:'ogi'},{title:'Date',data:'createdDate',render:d=>fmt.date(d)},
+        {title:'Vertical',data:'subVertical',render:(d,_,r)=>d||r.vertical||'—'},
+        {title:'Sub Reason',data:'subReason',render:d=>d||'<span style="color:#94a3b8">—</span>'},
+        {title:'Status',data:'status',render:d=>{const c=d==='Closed'?'green':d==='Open'?'red':'amber';return badge(d||'—',c);}},
+        {title:'AI Ints',data:'aiInteractionCount',width:'55px'},
+        {title:'Human Ints',data:'humanInteractionCount',width:'70px'},
+        {title:'Resolved by Decagon',data:'recontactResolvedByDecagon',width:'120px',render:d=>d?badge('YES','green'):badge('NO','red')},
+        {title:'Re-escalated to CS',data:'recontactReescalated',width:'120px',render:d=>d?badge('YES','amber'):badge('No','muted')}
+      ]
+    });
+  }
+}
+
 // ── RENDER ALL ──
 function renderDashboard(){
   const m=computeMetrics(STATE.filteredTickets);
   renderKPIs(m);renderEffectivenessCharts(m);renderComplianceSection(m);
   renderDefectSection(m);renderReasonAnalysis(m);renderMasterTable(m);renderCEOSummary(m);
+  renderRecontactTab(m);
 }
 
 // ── VALIDATION RENDER ──
@@ -798,7 +886,7 @@ function exportSummary(){
 
 // ── NAV ──
 function setupNav(){
-  const TITLES={upload:'Data Source',kpis:'Executive KPIs',effectiveness:'Decagon Effectiveness',compliance:'Decagon Compliance',defects:'System Defects',reasons:'Reason Analysis',executive:'Executive Summary',validation:'Data Validation',tickets:'Master Tickets'};
+  const TITLES={upload:'Data Source',kpis:'Executive KPIs',effectiveness:'Decagon Effectiveness',compliance:'Decagon Compliance',defects:'System Defects',reasons:'Reason Analysis',executive:'Executive Summary',validation:'Data Validation',tickets:'Master Tickets',recontact:'Re-contact Analysis'};
   document.querySelectorAll('.nav-item').forEach(item=>{
     item.addEventListener('click',()=>{
       document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));

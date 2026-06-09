@@ -30,6 +30,7 @@
     <a class="nav-item" data-tab="executive"><i class="fa-solid fa-crown"></i><span>Executive Summary</span></a>
     <a class="nav-item" data-tab="validation"><i class="fa-solid fa-shield-check"></i><span>Validation</span></a>
     <a class="nav-item" data-tab="tickets"><i class="fa-solid fa-table"></i><span>Master Tickets</span></a>
+    <a class="nav-item" data-tab="recontact"><i class="fa-solid fa-phone-arrow-up-right"></i><span>Re-contact Analysis</span></a>
   </nav>
   <div class="sidebar-footer">v3.2 · Way.com</div>
 </div>
@@ -196,6 +197,29 @@
       <div class="section-block" id="intBreakdownWrap" style="display:none">
         <h3 class="block-title">Interaction Type Breakdown <span class="level-tag">All Interactions</span></h3>
         <table id="intBreakdownTable" class="display nowrap" style="width:100%"></table>
+      </div>
+    </div>
+
+    <!-- RE-CONTACT ANALYSIS -->
+    <div class="tab-panel" id="tab-recontact">
+      <div class="panel-header">
+        <h2>Re-contact Analysis</h2>
+        <p>Tickets where customer previously had human interaction — then Decagon handled a follow-up contact</p>
+      </div>
+      <div class="kpi-grid" id="recontactKpiGrid"></div>
+      <div class="charts-grid-2" style="margin-top:1.25rem">
+        <div class="chart-card">
+          <div class="chart-hdr">Top Reasons — Resolved by Decagon on Re-contact</div>
+          <canvas id="recontactResolvedChart"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-hdr">Top Reasons — Re-escalated to CS after Decagon</div>
+          <canvas id="recontactEscalatedChart"></canvas>
+        </div>
+      </div>
+      <div class="section-block" style="margin-top:1.25rem">
+        <h3 class="block-title">Re-contact Ticket Details</h3>
+        <table id="recontactTable" class="display nowrap" style="width:100%"></table>
       </div>
     </div>
 
