@@ -12,7 +12,6 @@
 </head>
 <body>
 
-<!-- SIDEBAR -->
 <div class="sidebar" id="sidebar">
   <div class="sidebar-brand">
     <div class="brand-mark">W×D</div>
@@ -23,22 +22,19 @@
   </div>
   <nav class="sidebar-nav">
     <a class="nav-item active" data-tab="upload"><i class="fa-solid fa-upload"></i><span>Data Source</span></a>
-    <a class="nav-item" data-tab="validation"><i class="fa-solid fa-shield-check"></i><span>Validation</span></a>
     <a class="nav-item" data-tab="kpis"><i class="fa-solid fa-gauge-high"></i><span>Executive KPIs</span></a>
     <a class="nav-item" data-tab="effectiveness"><i class="fa-solid fa-chart-line"></i><span>Effectiveness</span></a>
     <a class="nav-item" data-tab="compliance"><i class="fa-solid fa-circle-check"></i><span>Compliance</span></a>
     <a class="nav-item" data-tab="defects"><i class="fa-solid fa-bug"></i><span>Defects</span></a>
     <a class="nav-item" data-tab="reasons"><i class="fa-solid fa-tags"></i><span>Reason Analysis</span></a>
-    <a class="nav-item" data-tab="tickets"><i class="fa-solid fa-table"></i><span>Master Tickets</span></a>
     <a class="nav-item" data-tab="executive"><i class="fa-solid fa-crown"></i><span>Executive Summary</span></a>
+    <a class="nav-item" data-tab="validation"><i class="fa-solid fa-shield-check"></i><span>Validation</span></a>
+    <a class="nav-item" data-tab="tickets"><i class="fa-solid fa-table"></i><span>Master Tickets</span></a>
   </nav>
-  <div class="sidebar-footer">v3.1 · Way.com</div>
+  <div class="sidebar-footer">v3.2 · Way.com</div>
 </div>
 
-<!-- MAIN -->
-<div class="main-wrapper">
-
-  <!-- TOP BAR -->
+<div class="main-wrapper" id="mainWrapper">
   <div class="topbar">
     <div class="topbar-left">
       <button class="btn-sidebar-toggle" id="sidebarToggle"><i class="fa-solid fa-bars"></i></button>
@@ -63,15 +59,11 @@
     </div>
   </div>
 
-  <!-- TAB PANELS -->
   <div class="tab-content">
 
-    <!-- ═══ DATA SOURCE ═══ -->
+    <!-- DATA SOURCE -->
     <div class="tab-panel active" id="tab-upload">
-      <div class="panel-header">
-        <h2>Data Source</h2>
-        <p>Upload your CS All Tickets export to begin</p>
-      </div>
+      <div class="panel-header"><h2>Data Source</h2><p>Upload your CS All Tickets export to begin</p></div>
       <div class="source-tabs">
         <button class="source-tab active"><i class="fa-solid fa-file-excel"></i> Upload CSV / XLSX</button>
         <button class="source-tab disabled"><i class="fa-brands fa-google"></i> Google Sheets <span class="soon-badge">Soon</span></button>
@@ -102,7 +94,84 @@
       </div>
     </div>
 
-    <!-- ═══ VALIDATION ═══ -->
+    <!-- EXECUTIVE KPIs -->
+    <div class="tab-panel" id="tab-kpis">
+      <div class="panel-header"><h2>Executive KPIs</h2><p>Ticket Level — All metrics derived from Decagon-handled calls</p></div>
+      <div class="kpi-grid" id="kpiGrid"></div>
+    </div>
+
+    <!-- EFFECTIVENESS -->
+    <div class="tab-panel" id="tab-effectiveness">
+      <div class="panel-header"><h2>Decagon Effectiveness</h2><p>Daily trend analysis from first date with data</p></div>
+      <div class="charts-grid-2">
+        <div class="chart-card"><div class="chart-hdr">Calls Handled by Decagon <span class="level-tag">Ticket</span><button class="btn-img-export" data-chart="decagonTicketsTrend"><i class="fa-solid fa-image"></i></button></div><canvas id="decagonTicketsTrend"></canvas></div>
+        <div class="chart-card"><div class="chart-hdr">Interactions by Decagon <span class="level-tag int">Interaction</span><button class="btn-img-export" data-chart="decagonIntsTrend"><i class="fa-solid fa-image"></i></button></div><canvas id="decagonIntsTrend"></canvas></div>
+        <div class="chart-card"><div class="chart-hdr">Decagon FCR Trend <span class="level-tag">Ticket</span><button class="btn-img-export" data-chart="fcrTrend"><i class="fa-solid fa-image"></i></button></div><canvas id="fcrTrend"></canvas></div>
+        <div class="chart-card"><div class="chart-hdr">CS Assisted & Containment <span class="level-tag">Ticket</span><button class="btn-img-export" data-chart="csAssistedTrend"><i class="fa-solid fa-image"></i></button></div><canvas id="csAssistedTrend"></canvas></div>
+      </div>
+    </div>
+
+    <!-- COMPLIANCE -->
+    <div class="tab-panel" id="tab-compliance">
+      <div class="panel-header"><h2>Decagon Compliance</h2><p>Based on 1,317 calls handled by Decagon only · Reason · Sub Reason · Status = Closed</p></div>
+      <div class="compliance-top">
+        <div class="gauge-wrap"><canvas id="complianceGauge" width="200" height="200"></canvas><div class="gauge-label"><span class="gauge-pct" id="gaugeCompPct">—</span><span class="gauge-sub">Compliance Rate</span></div></div>
+        <div class="compliance-breakdown">
+          <div class="comp-item"><span class="ci-icon pass"><i class="fa-solid fa-circle-check"></i></span><span class="ci-label">Fully Compliant</span><span class="ci-val" id="cv-full">—</span></div>
+          <div class="comp-item"><span class="ci-icon fail"><i class="fa-solid fa-circle-xmark"></i></span><span class="ci-label">Missing Reason</span><span class="ci-val drill" data-drill="missingReason" id="cv-reason">—</span></div>
+          <div class="comp-item"><span class="ci-icon fail"><i class="fa-solid fa-circle-xmark"></i></span><span class="ci-label">Missing Sub Reason</span><span class="ci-val drill" data-drill="missingSubReason" id="cv-sub">—</span></div>
+          <div class="comp-item"><span class="ci-icon fail"><i class="fa-solid fa-circle-xmark"></i></span><span class="ci-label">Status Not Closed</span><span class="ci-val drill" data-drill="statusNotClosed" id="cv-status">—</span></div>
+          <div class="comp-item"><span class="ci-icon fail"><i class="fa-solid fa-circle-xmark"></i></span><span class="ci-label">Pending Status</span><span class="ci-val drill" data-drill="pendingStatus" id="cv-pending">—</span></div>
+        </div>
+      </div>
+      <div class="charts-grid-2">
+        <div class="chart-card compact-chart"><div class="chart-hdr">Compliance Breakdown</div><div class="pie-wrap"><canvas id="compliancePie"></canvas></div></div>
+        <div class="chart-card"><div class="chart-hdr">Missing Fields by Date</div><canvas id="complianceBar"></canvas></div>
+      </div>
+      <div class="drill-wrap" id="compDrillWrap" style="display:none">
+        <div class="drill-hdr"><h4 id="compDrillTitle">Drill-down</h4><button class="btn-close-drill" id="closeCompDrill"><i class="fa-solid fa-xmark"></i></button></div>
+        <table id="compDrillTable" class="display nowrap" style="width:100%"></table>
+      </div>
+    </div>
+
+    <!-- DEFECTS -->
+    <div class="tab-panel" id="tab-defects">
+      <div class="panel-header"><h2>Decagon System Defects</h2><p>Duplicate tickets, same timestamp interactions, short interval interactions</p></div>
+      <div class="defect-config">
+        <label class="filter-label"><i class="fa-solid fa-stopwatch"></i> Short Interval Threshold</label>
+        <input type="number" class="filter-input" id="defectThreshold" value="60" min="1">
+        <span class="filter-sep">seconds</span>
+        <button class="btn-apply-filter" id="recalcDefectsBtn">Recalculate</button>
+      </div>
+      <div class="defect-grid" id="defectGrid"></div>
+    </div>
+
+    <!-- REASON ANALYSIS -->
+    <div class="tab-panel" id="tab-reasons">
+      <div class="panel-header"><h2>Top Reason Analysis</h2><p>Click any bar to see call status breakdown</p></div>
+      <div class="reason-tabs">
+        <button class="reason-tab active" data-rt="handled">Decagon Handled</button>
+        <button class="reason-tab" data-rt="cs">CS Assisted</button>
+        <button class="reason-tab" data-rt="comp">Compliance Failures</button>
+      </div>
+      <div class="reason-layout">
+        <div class="reason-chart-side"><div class="chart-card"><canvas id="reasonChart"></canvas></div></div>
+        <div class="reason-detail-side" id="reasonDetailSide">
+          <div class="reason-detail-placeholder"><i class="fa-solid fa-hand-pointer"></i><p>Click any bar to see breakdown</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EXECUTIVE SUMMARY -->
+    <div class="tab-panel" id="tab-executive">
+      <div class="panel-header-row">
+        <div><h2>Way-Decagon Executive Summary</h2><p>Auto-generated · Updates with every filter change</p></div>
+        <button class="btn-export-csv" id="exportSummaryBtn"><i class="fa-solid fa-file-lines"></i> Export Summary</button>
+      </div>
+      <div id="ceoSummaryCard"><div class="ceo-lock"><i class="fa-solid fa-crown"></i><p>Upload data to generate executive summary</p></div></div>
+    </div>
+
+    <!-- VALIDATION -->
     <div class="tab-panel" id="tab-validation">
       <div class="panel-header-row">
         <div><h2>Data Validation & Reconciliation</h2><p>All KPI calculations depend on validation passing</p></div>
@@ -124,112 +193,20 @@
         <div class="val-check-item" id="chk-types"><i class="fa-solid fa-circle-question"></i> Interaction types present</div>
         <div class="val-check-item" id="chk-compliance"><i class="fa-solid fa-circle-question"></i> Compliance fields present</div>
       </div>
-      <!-- Interaction Breakdown Table -->
       <div class="section-block" id="intBreakdownWrap" style="display:none">
-        <h3 class="block-title">Interaction Type Breakdown <span class="level-tag">All 75,574 Interactions</span></h3>
+        <h3 class="block-title">Interaction Type Breakdown <span class="level-tag">All Interactions</span></h3>
         <table id="intBreakdownTable" class="display nowrap" style="width:100%"></table>
       </div>
     </div>
 
-    <!-- ═══ EXECUTIVE KPIs ═══ -->
-    <div class="tab-panel" id="tab-kpis">
-      <div class="panel-header"><h2>Executive KPIs</h2><p>Ticket Level — All metrics derived from unique Ticket IDs</p></div>
-      <div class="kpi-grid" id="kpiGrid"></div>
-      <div class="section-block">
-        <h3 class="block-title">Decagon Journey Funnel <span class="level-tag">Ticket Level</span></h3>
-        <div class="funnel-visual" id="funnelVisual"></div>
-      </div>
-    </div>
-
-    <!-- ═══ EFFECTIVENESS ═══ -->
-    <div class="tab-panel" id="tab-effectiveness">
-      <div class="panel-header"><h2>AI Effectiveness</h2><p>Daily trend analysis from first date with data</p></div>
-      <div class="charts-grid-2">
-        <div class="chart-card"><div class="chart-hdr">Decagon Tickets <span class="level-tag">Ticket</span><button class="btn-img-export" data-chart="decagonTicketsTrend"><i class="fa-solid fa-image"></i></button></div><canvas id="decagonTicketsTrend"></canvas></div>
-        <div class="chart-card"><div class="chart-hdr">Decagon Interactions <span class="level-tag int">Interaction</span><button class="btn-img-export" data-chart="decagonIntsTrend"><i class="fa-solid fa-image"></i></button></div><canvas id="decagonIntsTrend"></canvas></div>
-        <div class="chart-card"><div class="chart-hdr">Decagon FCR Trend <span class="level-tag">Ticket</span><button class="btn-img-export" data-chart="fcrTrend"><i class="fa-solid fa-image"></i></button></div><canvas id="fcrTrend"></canvas></div>
-        <div class="chart-card"><div class="chart-hdr">CS Assisted & Containment <span class="level-tag">Ticket</span><button class="btn-img-export" data-chart="csAssistedTrend"><i class="fa-solid fa-image"></i></button></div><canvas id="csAssistedTrend"></canvas></div>
-      </div>
-    </div>
-
-    <!-- ═══ COMPLIANCE ═══ -->
-    <div class="tab-panel" id="tab-compliance">
-      <div class="panel-header"><h2>Decagon Compliance</h2><p>Reason · Sub Reason · Action Taken · Status = Closed</p></div>
-      <div class="compliance-top">
-        <div class="gauge-wrap"><canvas id="complianceGauge" width="200" height="200"></canvas><div class="gauge-label"><span class="gauge-pct" id="gaugeCompPct">—</span><span class="gauge-sub">Compliance Rate</span></div></div>
-        <div class="compliance-breakdown">
-          <div class="comp-item"><span class="ci-icon pass"><i class="fa-solid fa-circle-check"></i></span><span class="ci-label">Fully Compliant</span><span class="ci-val" id="cv-full">—</span></div>
-          <div class="comp-item"><span class="ci-icon fail"><i class="fa-solid fa-circle-xmark"></i></span><span class="ci-label">Missing Reason</span><span class="ci-val drill" data-drill="missingReason" id="cv-reason">—</span></div>
-          <div class="comp-item"><span class="ci-icon fail"><i class="fa-solid fa-circle-xmark"></i></span><span class="ci-label">Missing Sub Reason</span><span class="ci-val drill" data-drill="missingSubReason" id="cv-sub">—</span></div>
-          <div class="comp-item"><span class="ci-icon fail"><i class="fa-solid fa-circle-xmark"></i></span><span class="ci-label">Status Not Closed</span><span class="ci-val drill" data-drill="statusNotClosed" id="cv-status">—</span></div>
-        </div>
-      </div>
-      <div class="charts-grid-2">
-        <div class="chart-card"><div class="chart-hdr">Compliance Breakdown</div><canvas id="compliancePie"></canvas></div>
-        <div class="chart-card"><div class="chart-hdr">Missing Fields by Date (incl. Status Not Closed)</div><canvas id="complianceBar"></canvas></div>
-      </div>
-      <div class="drill-wrap" id="compDrillWrap" style="display:none">
-        <div class="drill-hdr"><h4 id="compDrillTitle">Drill-down</h4><button class="btn-close-drill" id="closeCompDrill"><i class="fa-solid fa-xmark"></i></button></div>
-        <table id="compDrillTable" class="display nowrap" style="width:100%"></table>
-      </div>
-    </div>
-
-    <!-- ═══ DEFECTS ═══ -->
-    <div class="tab-panel" id="tab-defects">
-      <div class="panel-header"><h2>Decagon System Defects</h2><p>Duplicate interactions, timestamp anomalies, short interval tickets</p></div>
-      <div class="defect-config">
-        <label class="filter-label"><i class="fa-solid fa-stopwatch"></i> Short Interval Threshold (tickets created within)</label>
-        <input type="number" class="filter-input" id="defectThreshold" value="60" min="1">
-        <span class="filter-sep">seconds</span>
-        <button class="btn-apply-filter" id="recalcDefectsBtn">Recalculate</button>
-      </div>
-      <div class="defect-grid" id="defectGrid"></div>
-      <div class="chart-card" style="margin-top:1.25rem">
-        <div class="chart-hdr">Defect Ticket Details</div>
-        <table id="defectTable" class="display nowrap" style="width:100%"></table>
-      </div>
-    </div>
-
-    <!-- ═══ REASON ANALYSIS ═══ -->
-    <div class="tab-panel" id="tab-reasons">
-      <div class="panel-header"><h2>Top Reason Analysis</h2><p>Click any bar to see ticket status breakdown on the right</p></div>
-      <div class="reason-tabs">
-        <button class="reason-tab active" data-rt="handled">Decagon Handled</button>
-        <button class="reason-tab" data-rt="cs">CS Assisted</button>
-        <button class="reason-tab" data-rt="comp">Compliance Failures</button>
-      </div>
-      <div class="reason-layout">
-        <div class="reason-chart-side">
-          <div class="chart-card"><canvas id="reasonChart"></canvas></div>
-        </div>
-        <div class="reason-detail-side" id="reasonDetailSide">
-          <div class="reason-detail-placeholder">
-            <i class="fa-solid fa-hand-pointer"></i>
-            <p>Click any bar to see breakdown</p>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ═══ MASTER TICKETS ═══ -->
+    <!-- MASTER TICKETS -->
     <div class="tab-panel" id="tab-tickets">
-      <div class="panel-header"><h2>Master Ticket Table</h2><p>All tickets · Click Ticket ID for full timeline · Sort & drill-down enabled</p></div>
+      <div class="panel-header"><h2>Master Ticket Table</h2><p>Decagon calls only · Click Ticket ID for full timeline · Sort & drill-down enabled</p></div>
       <div class="table-wrap"><table id="masterTable" class="display nowrap" style="width:100%"></table></div>
     </div>
 
-    <!-- ═══ EXECUTIVE SUMMARY ═══ -->
-    <div class="tab-panel" id="tab-executive">
-      <div class="panel-header-row">
-        <div><h2>Way-Decagon Executive Summary</h2><p>Auto-generated · Updates with every filter change</p></div>
-        <button class="btn-export-csv" id="exportSummaryBtn"><i class="fa-solid fa-file-lines"></i> Export Summary</button>
-      </div>
-      <div id="ceoSummaryCard">
-        <div class="ceo-lock"><i class="fa-solid fa-crown"></i><p>Upload data to generate executive summary</p></div>
-      </div>
-    </div>
-
-  </div><!-- end tab-content -->
-</div><!-- end main-wrapper -->
+  </div>
+</div>
 
 <!-- TIMELINE MODAL -->
 <div class="modal-overlay" id="timelineModal" style="display:none">
@@ -242,7 +219,19 @@
   </div>
 </div>
 
-<!-- TOAST -->
+<!-- DEFECT DRILL MODAL -->
+<div class="modal-overlay" id="defectModal" style="display:none">
+  <div class="modal-box modal-wide">
+    <div class="modal-hdr">
+      <div><h3 class="modal-title" id="defectModalTitle">Defect Details</h3></div>
+      <button class="btn-close-modal" id="closeDefectModal"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <table id="defectDrillTable" class="display nowrap" style="width:100%"></table>
+    </div>
+  </div>
+</div>
+
 <div class="toast-container" id="toastContainer"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>

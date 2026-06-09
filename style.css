@@ -387,3 +387,13 @@ table.dataTable tbody tr:hover td{background:#f8fafc!important}
 @media(max-width:1280px){.kpi-grid{grid-template-columns:repeat(4,1fr)}.val-grid{grid-template-columns:repeat(4,1fr)}}
 @media(max-width:1024px){.kpi-grid{grid-template-columns:repeat(3,1fr)}.charts-grid-2{grid-template-columns:1fr}.defect-grid{grid-template-columns:repeat(2,1fr)}.ceo-sections{grid-template-columns:1fr}.ceo-kpi-row{grid-template-columns:repeat(3,1fr)}.ceo-meta-row{grid-template-columns:repeat(2,1fr)}.reason-layout{grid-template-columns:1fr}}
 @media(max-width:768px){.sidebar{transform:translateX(calc(-1 * var(--sidebar-w)))}.sidebar.mobile-open{transform:none}.main-wrapper{margin-left:0}.kpi-grid{grid-template-columns:repeat(2,1fr)}.val-grid{grid-template-columns:repeat(2,1fr)}.tab-content{padding:1rem}.defect-grid{grid-template-columns:1fr 1fr}}
+
+/* ── COMPACT PIE CHART ── */
+.compact-chart .pie-wrap { max-width: 280px; margin: 0 auto; }
+.modal-wide { max-width: 1100px; }
+
+/* ── KPI CARD VARIANTS ── */
+.kpi-val-large { font-size: 1.65rem; font-weight: 800; color: var(--text); font-family: var(--mono); line-height: 1; }
+.kpi-val-small { font-size: 12px; color: var(--text-3); margin-top: 0.2rem; font-family: var(--mono); }
+.kpi-pct-large { font-size: 1.65rem; font-weight: 800; font-family: var(--mono); line-height: 1; }
+.kpi-num-small { font-size: 12px; color: var(--text-3); margin-top: 0.2rem; font-family: var(--mono); }
