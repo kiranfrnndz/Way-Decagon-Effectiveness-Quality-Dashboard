@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Way-Decagon Effectiveness & Quality Dashboard</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.bootstrap5.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- STICKY NAV -->
+<nav class="sticky-nav" id="mainNav">
+  <div class="nav-inner">
+    <div class="nav-brand">
+      <div class="brand-mark">
+        <span class="brand-w">W</span><span class="brand-sep">×</span><span class="brand-d">D</span>
+      </div>
+      <div class="brand-text">
+        <span class="brand-title">Way-Decagon</span>
+        <span class="brand-sub">AI Effectiveness & Quality</span>
+      </div>
+    </div>
+    <div class="nav-links" id="navLinks">
+      <a href="#section-upload" class="nav-link" data-section="upload"><i class="fa-solid fa-upload"></i> Data</a>
+      <a href="#section-validation" class="nav-link" data-section="validation"><i class="fa-solid fa-shield-check"></i> Validation</a>
+      <a href="#section-kpis" class="nav-link" data-section="kpis"><i class="fa-solid fa-gauge-high"></i> KPIs</a>
+      <a href="#section-effectiveness" class="nav-link" data-section="effectiveness"><i class="fa-solid fa-chart-line"></i> Effectiveness</a>
+      <a href="#section-compliance" class="nav-link" data-section="compliance"><i class="fa-solid fa-circle-check"></i> Compliance</a>
+      <a href="#section-defects" class="nav-link" data-section="defects"><i class="fa-solid fa-bug"></i> Defects</a>
+      <a href="#section-reasons" class="nav-link" data-section="reasons"><i class="fa-solid fa-tags"></i> Reasons</a>
+      <a href="#section-tickets" class="nav-link" data-section="tickets"><i class="fa-solid fa-table"></i> Tickets</a>
+      <a href="#section-ceo" class="nav-link" data-section="ceo"><i class="fa-solid fa-crown"></i> Executive</a>
+    </div>
+    <div class="nav-controls">
+      <button class="btn-theme" id="themeToggle" title="Toggle theme">
+        <i class="fa-solid fa-moon" id="themeIcon"></i>
+      </button>
+      <button class="btn-export-pdf" id="exportPdfBtn" title="Export PDF">
+        <i class="fa-solid fa-file-pdf"></i> Export
+      </button>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<header class="dashboard-hero">
+  <div class="hero-grid-bg"></div>
+  <div class="hero-content">
+    <div class="hero-eyebrow">WAY.COM × DECAGON AI</div>
+    <h1 class="hero-title">Effectiveness & Quality<br><span class="hero-accent">Dashboard</span></h1>
+    <p class="hero-sub">CEO · Leadership · Operations · Product · Engineering · AI Governance</p>
+    <div class="hero-meta" id="heroMeta">
+      <span class="meta-pill"><i class="fa-solid fa-circle-info"></i> Upload CSV to begin analysis</span>
+    </div>
+  </div>
+</header>
+
+<!-- MAIN CONTENT -->
+<main class="dashboard-main">
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 1: DATA SOURCE
+  ════════════════════════════════════════════════ -->
+  <section class="dash-section" id="section-upload">
+    <div class="section-header">
+      <div class="section-label">01</div>
+      <div>
+        <h2 class="section-title">Data Source</h2>
+        <p class="section-desc">Upload your CS All Tickets export to begin</p>
+      </div>
+    </div>
+
+    <div class="source-tabs">
+      <button class="source-tab active" id="tabCsv">
+        <i class="fa-solid fa-file-csv"></i> Upload CSV
+      </button>
+      <button class="source-tab disabled" id="tabSheets" title="Coming Soon">
+        <i class="fa-brands fa-google"></i> Google Sheets
+        <span class="coming-soon-badge">Soon</span>
+      </button>
+    </div>
+
+    <div id="csvPanel">
+      <div class="drop-zone" id="dropZone">
+        <div class="drop-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+        <div class="drop-title">Drop your CSV file here</div>
+        <div class="drop-sub">or <label class="drop-link" for="fileInput">browse files</label></div>
+        <div class="drop-format">CS_All_Tickets export · UTF-8 CSV</div>
+        <input type="file" id="fileInput" accept=".csv" style="display:none">
+      </div>
+
+      <div class="file-status" id="fileStatus" style="display:none">
+        <div class="file-status-grid">
+          <div class="file-stat">
+            <span class="fstat-label">Filename</span>
+            <span class="fstat-val" id="statFilename">—</span>
+          </div>
+          <div class="file-stat">
+            <span class="fstat-label">Loaded</span>
+            <span class="fstat-val" id="statLoaded">—</span>
+          </div>
+          <div class="file-stat">
+            <span class="fstat-label">Records</span>
+            <span class="fstat-val" id="statRecords">—</span>
+          </div>
+          <div class="file-stat">
+            <span class="fstat-label">Status</span>
+            <span class="fstat-val" id="statStatus">—</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="upload-progress" id="uploadProgress" style="display:none">
+        <div class="progress-bar-outer">
+          <div class="progress-bar-inner" id="progressBar"></div>
+        </div>
+        <div class="progress-label" id="progressLabel">Processing…</div>
+      </div>
+    </div>
+
+    <!-- SAMPLE DATA BUTTON -->
+    <div class="sample-data-row">
+      <button class="btn-sample" id="loadSampleBtn">
+        <i class="fa-solid fa-flask"></i> Load Sample Dataset
+      </button>
+      <span class="sample-hint">500 synthetic records for demo</span>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 2: VALIDATION
+  ════════════════════════════════════════════════ -->
+  <section class="dash-section locked-section" id="section-validation">
+    <div class="section-header">
+      <div class="section-label">02</div>
+      <div>
+        <h2 class="section-title">Data Validation & Reconciliation</h2>
+        <p class="section-desc">All KPI calculations depend on validation passing</p>
+      </div>
+      <div class="validation-badge" id="validationBadge">
+        <i class="fa-solid fa-lock"></i> Awaiting Data
+      </div>
+    </div>
+
+    <div class="validation-grid" id="validationGrid">
+      <div class="val-card" id="vc-records">
+        <span class="val-label">Total Records Loaded</span>
+        <span class="val-num" id="vv-records">—</span>
+      </div>
+      <div class="val-card" id="vc-ogi">
+        <span class="val-label">Unique OGI Count</span>
+        <span class="val-num" id="vv-ogi">—</span>
+      </div>
+      <div class="val-card" id="vc-tickets">
+        <span class="val-label">Unique Ticket IDs</span>
+        <span class="val-num" id="vv-tickets">—</span>
+      </div>
+      <div class="val-card" id="vc-interactions">
+        <span class="val-label">Total Interactions</span>
+        <span class="val-num" id="vv-interactions">—</span>
+      </div>
+      <div class="val-card" id="vc-ai">
+        <span class="val-label">AI-Agent Call Interactions</span>
+        <span class="val-num" id="vv-ai">—</span>
+      </div>
+      <div class="val-card" id="vc-human">
+        <span class="val-label">Human Interactions</span>
+        <span class="val-num" id="vv-human">—</span>
+      </div>
+      <div class="val-card" id="vc-internal">
+        <span class="val-label">Internal Interactions</span>
+        <span class="val-num" id="vv-internal">—</span>
+      </div>
+    </div>
+
+    <div class="val-checks" id="valChecks">
+      <div class="val-check-item" id="chk-cols"><i class="fa-solid fa-circle-question"></i> Required columns present</div>
+      <div class="val-check-item" id="chk-ticket"><i class="fa-solid fa-circle-question"></i> Ticket IDs present</div>
+      <div class="val-check-item" id="chk-ogi"><i class="fa-solid fa-circle-question"></i> OGI identifiers present</div>
+      <div class="val-check-item" id="chk-types"><i class="fa-solid fa-circle-question"></i> Interaction types present</div>
+      <div class="val-check-item" id="chk-compliance"><i class="fa-solid fa-circle-question"></i> Compliance fields present</div>
+    </div>
+  </section>
+
+  <!-- GLOBAL FILTERS -->
+  <section class="dash-section locked-section" id="section-filters">
+    <div class="filter-bar" id="filterBar">
+      <div class="filter-group">
+        <label class="filter-label"><i class="fa-solid fa-calendar"></i> Date Range</label>
+        <input type="date" class="filter-input" id="filterDateFrom">
+        <span class="filter-sep">→</span>
+        <input type="date" class="filter-input" id="filterDateTo">
+      </div>
+      <div class="filter-group">
+        <label class="filter-label"><i class="fa-solid fa-tag"></i> Reason</label>
+        <select class="filter-select" id="filterReason">
+          <option value="">All Reasons</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label"><i class="fa-solid fa-layer-group"></i> Interaction Type</label>
+        <select class="filter-select" id="filterType">
+          <option value="">All Types</option>
+        </select>
+      </div>
+      <button class="btn-apply-filter" id="applyFilterBtn"><i class="fa-solid fa-filter"></i> Apply</button>
+      <button class="btn-clear-filter" id="clearFilterBtn"><i class="fa-solid fa-xmark"></i> Clear</button>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 3: EXECUTIVE KPIs
+  ════════════════════════════════════════════════ -->
+  <section class="dash-section locked-section" id="section-kpis">
+    <div class="section-header">
+      <div class="section-label">03</div>
+      <div>
+        <h2 class="section-title">Executive KPIs</h2>
+        <p class="section-desc">Ticket Level — All metrics derived from unique Ticket IDs</p>
+      </div>
+    </div>
+
+    <div class="kpi-grid" id="kpiGrid">
+      <!-- KPI cards injected by JS -->
+    </div>
+
+    <!-- JOURNEY FUNNEL -->
+    <div class="funnel-container">
+      <h3 class="subsection-title">AI Journey Funnel <span class="level-badge">Ticket Level</span></h3>
+      <div class="funnel-visual" id="funnelVisual">
+        <!-- Injected by JS -->
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 4: AI EFFECTIVENESS
+  ════════════════════════════════════════════════ -->
+  <section class="dash-section locked-section" id="section-effectiveness">
+    <div class="section-header">
+      <div class="section-label">04</div>
+      <div>
+        <h2 class="section-title">AI Effectiveness</h2>
+        <p class="section-desc">Trend analysis with drill-down support</p>
+      </div>
+    </div>
+
+    <div class="charts-grid-2">
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <span>AI Tickets Created <span class="level-badge">Ticket</span></span>
+          <button class="btn-chart-export" data-chart="aiTicketsTrend"><i class="fa-solid fa-image"></i></button>
+        </div>
+        <canvas id="aiTicketsTrend"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <span>AI Interactions <span class="level-badge interaction">Interaction</span></span>
+          <button class="btn-chart-export" data-chart="aiInteractionsTrend"><i class="fa-solid fa-image"></i></button>
+        </div>
+        <canvas id="aiInteractionsTrend"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <span>FCR Rate Trend <span class="level-badge">Ticket</span></span>
+          <button class="btn-chart-export" data-chart="fcrTrend"><i class="fa-solid fa-image"></i></button>
+        </div>
+        <canvas id="fcrTrend"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <span>Human Touch & Escalation <span class="level-badge">Ticket</span></span>
+          <button class="btn-chart-export" data-chart="humanTrend"><i class="fa-solid fa-image"></i></button>
+        </div>
+        <canvas id="humanTrend"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 5: COMPLIANCE
+  ════════════════════════════════════════════════ -->
+  <section class="dash-section locked-section" id="section-compliance">
+    <div class="section-header">
+      <div class="section-label">05</div>
+      <div>
+        <h2 class="section-title">AI Compliance</h2>
+        <p class="section-desc">Reason · Sub Reason · Action Taken completeness for AI tickets</p>
+      </div>
+    </div>
+
+    <div class="compliance-score-row">
+      <div class="compliance-gauge-wrap">
+        <canvas id="complianceGauge" width="220" height="220"></canvas>
+        <div class="gauge-label">
+          <span class="gauge-pct" id="gaugeCompPct">—</span>
+          <span class="gauge-sub">Compliance Rate</span>
+        </div>
+      </div>
+      <div class="compliance-breakdown">
+        <div class="comp-item" id="ci-full">
+          <span class="ci-icon pass"><i class="fa-solid fa-circle-check"></i></span>
+          <span class="ci-label">Fully Compliant</span>
+          <span class="ci-val" id="cv-full">—</span>
+        </div>
+        <div class="comp-item" id="ci-reason">
+          <span class="ci-icon fail"><i class="fa-solid fa-circle-xmark"></i></span>
+          <span class="ci-label">Missing Reason</span>
+          <span class="ci-val clickable-drill" data-drill="missingReason" id="cv-reason">—</span>
+        </div>
+        <div class="comp-item" id="ci-sub">
+          <span class="ci-icon fail"><i class="fa-solid fa-circle-xmark"></i></span>
+          <span class="ci-label">Missing Sub Reason</span>
+          <span class="ci-val clickable-drill" data-drill="missingSubReason" id="cv-sub">—</span>
+        </div>
+        <div class="comp-item" id="ci-action">
+          <span class="ci-icon fail"><i class="fa-solid fa-circle-xmark"></i></span>
+          <span class="ci-label">Missing Action Taken</span>
+          <span class="ci-val clickable-drill" data-drill="missingAction" id="cv-action">—</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="charts-grid-2">
+      <div class="chart-card">
+        <div class="chart-card-header">Compliance Breakdown</div>
+        <canvas id="compliancePie"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-header">Missing Fields by Date</div>
+        <canvas id="complianceBar"></canvas>
+      </div>
+    </div>
+
+    <div class="drill-table-wrap" id="complianceDrillWrap" style="display:none">
+      <div class="drill-header">
+        <h4 id="compDrillTitle">Compliance Drill-down</h4>
+        <button class="btn-close-drill" id="closeCompDrill"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <table id="compDrillTable" class="display nowrap" style="width:100%"></table>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 6: SYSTEM DEFECTS
+  ════════════════════════════════════════════════ -->
+  <section class="dash-section locked-section" id="section-defects">
+    <div class="section-header">
+      <div class="section-label">06</div>
+      <div>
+        <h2 class="section-title">AI System Defects</h2>
+        <p class="section-desc">Duplicate interactions, timestamp anomalies, system integrity</p>
+      </div>
+    </div>
+
+    <div class="defect-config">
+      <label class="filter-label"><i class="fa-solid fa-stopwatch"></i> Short Interval Threshold</label>
+      <input type="number" class="filter-input" id="defectThreshold" value="60" min="1" max="3600">
+      <span class="filter-sep">seconds</span>
+      <button class="btn-apply-filter" id="recalcDefectsBtn">Recalculate</button>
+    </div>
+
+    <div class="defect-grid" id="defectGrid">
+      <!-- Injected by JS -->
+    </div>
+
+    <div class="chart-card" style="margin-top:1.5rem">
+      <div class="chart-card-header">Top Defect-Affected Tickets</div>
+      <table id="defectTable" class="display nowrap" style="width:100%"></table>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 7: TOP REASONS
+  ════════════════════════════════════════════════ -->
+  <section class="dash-section locked-section" id="section-reasons">
+    <div class="section-header">
+      <div class="section-label">07</div>
+      <div>
+        <h2 class="section-title">Top Reason Analysis</h2>
+        <p class="section-desc">AI-handled, escalated, and compliance failure drivers</p>
+      </div>
+    </div>
+
+    <div class="reason-tabs">
+      <button class="reason-tab active" data-rt="ai">AI Handled</button>
+      <button class="reason-tab" data-rt="sub">Sub Reasons</button>
+      <button class="reason-tab" data-rt="esc">Escalated</button>
+      <button class="reason-tab" data-rt="comp">Compliance Failures</button>
+    </div>
+
+    <div class="reason-panels">
+      <div class="reason-panel active" id="rp-ai">
+        <div class="charts-grid-2">
+          <div class="chart-card">
+            <canvas id="topReasonsAI"></canvas>
+          </div>
+          <div class="chart-card">
+            <table id="topReasonsAITable" class="display nowrap" style="width:100%"></table>
+          </div>
+        </div>
+      </div>
+      <div class="reason-panel" id="rp-sub">
+        <div class="charts-grid-2">
+          <div class="chart-card">
+            <canvas id="topSubReasons"></canvas>
+          </div>
+          <div class="chart-card">
+            <table id="topSubReasonsTable" class="display nowrap" style="width:100%"></table>
+          </div>
+        </div>
+      </div>
+      <div class="reason-panel" id="rp-esc">
+        <div class="charts-grid-2">
+          <div class="chart-card">
+            <canvas id="topReasonsEsc"></canvas>
+          </div>
+          <div class="chart-card">
+            <table id="topReasonsEscTable" class="display nowrap" style="width:100%"></table>
+          </div>
+        </div>
+      </div>
+      <div class="reason-panel" id="rp-comp">
+        <div class="charts-grid-2">
+          <div class="chart-card">
+            <canvas id="topReasonsComp"></canvas>
+          </div>
+          <div class="chart-card">
+            <table id="topReasonsCompTable" class="display nowrap" style="width:100%"></table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 8: MASTER TICKET TABLE
+  ════════════════════════════════════════════════ -->
+  <section class="dash-section locked-section" id="section-tickets">
+    <div class="section-header">
+      <div class="section-label">08</div>
+      <div>
+        <h2 class="section-title">Master Ticket Table</h2>
+        <p class="section-desc">Ticket Level — Click any Ticket ID for full timeline</p>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table id="masterTable" class="display nowrap" style="width:100%"></table>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 9: CEO EXECUTIVE SUMMARY
+  ════════════════════════════════════════════════ -->
+  <section class="dash-section locked-section" id="section-ceo">
+    <div class="section-header">
+      <div class="section-label">09</div>
+      <div>
+        <h2 class="section-title">Way-Decagon Executive Summary</h2>
+        <p class="section-desc">Auto-generated · Updates with every filter change</p>
+      </div>
+      <div class="ceo-actions">
+        <button class="btn-export-csv" id="exportSummaryBtn"><i class="fa-solid fa-file-lines"></i> Export Summary</button>
+      </div>
+    </div>
+
+    <div class="ceo-summary-card" id="ceoSummaryCard">
+      <div class="ceo-lock-msg">
+        <i class="fa-solid fa-crown"></i>
+        <p>Upload data to generate executive summary</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- TICKET TIMELINE MODAL -->
+<div class="modal-overlay" id="timelineModal" style="display:none">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div>
+        <h3 class="modal-title" id="timelineTicketId">Ticket Timeline</h3>
+        <p class="modal-sub" id="timelineTicketMeta"></p>
+      </div>
+      <button class="btn-close-modal" id="closeTimelineModal"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="timelineBody"></div>
+  </div>
+</div>
+
+<!-- DRILL-DOWN MODAL -->
+<div class="modal-overlay" id="drillModal" style="display:none">
+  <div class="modal-box modal-wide">
+    <div class="modal-header">
+      <h3 class="modal-title" id="drillModalTitle">Drill-down</h3>
+      <button class="btn-close-modal" id="closeDrillModal"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <table id="drillModalTable" class="display nowrap" style="width:100%"></table>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- SCRIPTS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.bootstrap5.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
