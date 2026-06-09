@@ -170,10 +170,18 @@ function computeMetrics(ticketMap){
   });
   const dupTicketCount=Object.values(ogiTimestampMap).filter(s=>s.size>1).length;
 
+  // Calculate filtered totals from filtered ticket map
+  const filteredAIInts=all.reduce((s,t)=>s+t.aiInteractionCount,0);
+  // For total calls in filtered range, count from raw rows matching date range
+  const filteredHumanCallInts=all.reduce((s,t)=>s+t.humanInteractionCount,0);
+  const filteredTotalCallInts=filteredAIInts+filteredHumanCallInts;
+  // Total records = all interactions from filtered tickets
+  const filteredTotalRecords=all.reduce((s,t)=>s+t.interactions.length+t.internalInteractionCount,0);
+
   return{
-    totalRecords:STATE.rawRows.length,
-    totalCallInts:STATE.totalCallInteractions,
-    totalAIInts:STATE.totalAIInteractions,
+    totalRecords:filteredTotalRecords||STATE.rawRows.length,
+    totalCallInts:filteredTotalCallInts||STATE.totalCallInteractions,
+    totalAIInts:filteredAIInts||STATE.totalAIInteractions,
     totalTickets:all.length,
     decagonTickets:decCount,
     decagonOnlyCount:decOnlyCount,
