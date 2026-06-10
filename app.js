@@ -330,8 +330,8 @@ function processRows(rows,filename){
           STATE.ticketMap=map;STATE.filteredTickets=new Map(map);
           computeShortIntervalDefects(STATE.ticketMap);
           const m=computeMetrics(STATE.ticketMap);
-          const allDates=[...map.values()].map(t=>t.createdDate).filter(Boolean).map(d=>new Date(d)).filter(d=>!isNaN(d));
-          if(allDates.length){document.getElementById('globalDateFrom').value=new Date(Math.min(...allDates)).toISOString().slice(0,10);document.getElementById('globalDateTo').value=new Date(Math.max(...allDates)).toISOString().slice(0,10);document.getElementById('dateRangeBar').style.display='flex';}
+          const allDates=[...map.values()].filter(t=>t.aiInteractionDate).map(t=>t.aiInteractionDate);
+          if(allDates.length){const minD=allDates.reduce((a,b)=>a<b?a:b);const maxD=allDates.reduce((a,b)=>a>b?a:b);document.getElementById('globalDateFrom').value=minD;document.getElementById('globalDateTo').value=maxD;document.getElementById('dateRangeBar').style.display='flex';}
           document.getElementById('dataBadge').style.display='flex';
           document.getElementById('dataBadgeText').textContent=fmt.num(m.decagonTickets)+' Decagon Calls';
           pg.style.display='none';
