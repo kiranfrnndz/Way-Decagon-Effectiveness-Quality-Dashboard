@@ -270,7 +270,7 @@ function generateSampleData(n=500){
 // ── UPLOAD ──
 function setupUpload(){
   const dz=document.getElementById('dropZone'),fi=document.getElementById('fileInput');
-  dz.addEventListener('click',()=>fi.click());
+  dz.addEventListener('click',(e)=>{if(e.target.id==="browseBtn"||e.target===dz||e.target.classList.contains("drop-icon")||e.target.classList.contains("drop-title")||e.target.classList.contains("drop-sub")||e.target.classList.contains("drop-format"))fi.click();});document.getElementById("browseBtn")?.addEventListener("click",(e)=>{e.stopPropagation();fi.click();});
   dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag-over');});
   dz.addEventListener('dragleave',()=>dz.classList.remove('drag-over'));
   dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('drag-over');if(e.dataTransfer.files[0])processFile(e.dataTransfer.files[0]);});
