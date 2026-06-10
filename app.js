@@ -33,7 +33,22 @@ function showToast(msg,type='info',dur=4000){
 }
 function pct(n,d){return d>0?(n/d*100):0;}
 function badge(t,c='muted'){return`<span class="badge badge-${c}">${t}</span>`;}
-function parseDate(d){if(!d)return null;const dt=new Date(d);return isNaN(dt)?null:dt.getTime();}
+function parseDate(d){
+  if(!d)return null;
+  const s=String(d).trim();
+  // Parse M/D/YYYY H:MM:SS AM/PM format as local time to avoid UTC timezone shift
+  const m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)$/i);
+  if(m){
+    let h=parseInt(m[4]);
+    const mn=parseInt(m[5]),sc=parseInt(m[6]),ampm=m[7].toUpperCase();
+    if(ampm==='AM'&&h===12)h=0;
+    if(ampm==='PM'&&h!==12)h+=12;
+    const dt=new Date(parseInt(m[3]),parseInt(m[1])-1,parseInt(m[2]),h,mn,sc);
+    return isNaN(dt)?null:dt.getTime();
+  }
+  const dt=new Date(d);
+  return isNaN(dt)?null:dt.getTime();
+}
 
 // ── COLUMN MAP ──
 const COL_C={ticketId:['Ticket ID','ticket_id'],ogi:['OGI','ogi'],interaction:['Interaction','Interaction Type'],intDate:['Interaction date','Interaction Date','Created Date'],intId:['Interaction ID'],reason:['TKT_IssueReason','Reason'],subReason:['Sub Reason','sub_reason'],action:['Action','Action Taken'],status:['Status'],agent:['Agent Name'],vertical:['Vertical'],subVertical:['SubVertical','Sub Vertical'],ticketCreatedDate:['Ticket_created_date','Ticket Created Date']};
