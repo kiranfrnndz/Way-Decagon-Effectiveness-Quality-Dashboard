@@ -861,7 +861,7 @@ function applyDateFilter(){
 function clearDateFilter(){
   STATE.filteredTickets=new Map(STATE.ticketMap);
   const dates=[...STATE.ticketMap.values()].map(t=>t.createdDate).filter(Boolean).map(d=>new Date(d)).filter(d=>!isNaN(d));
-  if(dates.length){document.getElementById('globalDateFrom').value=new Date(Math.min(...dates)).toISOString().slice(0,10);document.getElementById('globalDateTo').value=new Date(Math.max(...dates)).toISOString().slice(0,10);}
+  if(dates.length){dates.sort();document.getElementById('globalDateFrom').value=dates[0];document.getElementById('globalDateTo').value=dates[dates.length-1];}
   renderDashboard();showToast('Filter cleared','info');
 }
 
