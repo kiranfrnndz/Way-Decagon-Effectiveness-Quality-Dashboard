@@ -163,7 +163,7 @@ function enrichTicket(tk){
     tk.dateBucket = tk.aiInteractionDate;
   } else if(tk.createdDate){
     const d=new Date(tk.createdDate);
-    if(!isNaN(d)) tk.dateBucket=d.toISOString().slice(0,10);
+    if(!isNaN(d)) tk.dateBucket=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
   }
 }
 
