@@ -159,7 +159,7 @@ function enrichTicket(tk){
   // Customer can call at any time after ticket creation
   const firstAIDate = firstAI ? new Date(firstAI.createdDate) : null;
   if(firstAIDate&&!isNaN(firstAIDate)){
-    tk.aiInteractionDate = firstAIDate.toISOString().slice(0,10);
+    tk.aiInteractionDate = firstAIDate.getFullYear()+"-"+(String(firstAIDate.getMonth()+1).padStart(2,"0"))+"-"+(String(firstAIDate.getDate()).padStart(2,"0"));
     tk.dateBucket = tk.aiInteractionDate;
   } else if(tk.createdDate){
     const d=new Date(tk.createdDate);
