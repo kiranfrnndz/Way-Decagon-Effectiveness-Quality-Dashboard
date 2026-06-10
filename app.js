@@ -157,7 +157,7 @@ function enrichTicket(tk){
 
   // Use AI-Agent Call interaction date as the date bucket
   // Customer can call at any time after ticket creation
-  const firstAIDate = firstAI ? new Date(firstAI.createdDate) : null;
+  const firstAIDate = firstAI ? (firstAI.parsedDate ? new Date(firstAI.parsedDate) : null) : null;
   if(firstAIDate&&!isNaN(firstAIDate)){
     tk.aiInteractionDate = firstAIDate.getFullYear()+"-"+(String(firstAIDate.getMonth()+1).padStart(2,"0"))+"-"+(String(firstAIDate.getDate()).padStart(2,"0"));
     tk.dateBucket = tk.aiInteractionDate;
