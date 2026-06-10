@@ -162,7 +162,7 @@ function enrichTicket(tk){
     tk.aiInteractionDate = firstAIDate.getFullYear()+"-"+(String(firstAIDate.getMonth()+1).padStart(2,"0"))+"-"+(String(firstAIDate.getDate()).padStart(2,"0"));
     tk.dateBucket = tk.aiInteractionDate;
   } else if(tk.createdDate){
-    const d=new Date(tk.createdDate);
+    const d=new Date(tk.interactions[0]?.parsedDate||tk.createdDate);
     if(!isNaN(d)) tk.dateBucket=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
   }
 }
@@ -860,7 +860,7 @@ function applyDateFilter(){
 
 function clearDateFilter(){
   STATE.filteredTickets=new Map(STATE.ticketMap);
-  const dates=[...STATE.ticketMap.values()].map(t=>t.createdDate).filter(Boolean).map(d=>new Date(d)).filter(d=>!isNaN(d));
+  const dates=[...STATE.ticketMap.values()].filter(t=>t.aiInteractionDate).map(t=>t.aiInteractionDate);
   if(dates.length){dates.sort();document.getElementById('globalDateFrom').value=dates[0];document.getElementById('globalDateTo').value=dates[dates.length-1];}
   renderDashboard();showToast('Filter cleared','info');
 }
