@@ -219,6 +219,7 @@ function computeMetrics(ticketMap){
   const to=document.getElementById('globalDateTo')?document.getElementById('globalDateTo').value:'';
   const cm=STATE.colMap;
   let filteredTotalRecords=0,filteredTotalCallInts=0,filteredAIInts=0;
+  console.log('[DEBUG] computeMetrics from='+from+' to='+to+' colMap.intDate='+cm.intDate+' rawRows='+STATE.rawRows.length);
   const CALL_TYPES=['Call','AI-Agent Call'];
   STATE.rawRows.forEach(row=>{
     const rawDate=cm.intDate?row[cm.intDate]:'';
