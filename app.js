@@ -224,6 +224,20 @@ function computeMetrics(ticketMap){
     if(itype==='AI-Agent Call')filteredAIInts++;
   });
 
+  // Also recount AI interactions per filtered ticket using only interactions within date range
+  dec.forEach(t=>{
+    t.aiInteractionCount=t.interactions.filter(i=>{
+      if(i.type!=='AI-Agent Call')return false;
+      if(!i.createdDate)return true;
+      const d=new Date(i.createdDate);
+      if(isNaN(d))return true;
+      const ds=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      if(from&&ds<from)return false;
+      if(to&&ds>to)return false;
+      return true;
+    }).length;
+  });
+
   return{
     totalRecords:filteredTotalRecords||STATE.rawRows.length,
     totalCallInts:filteredTotalCallInts||STATE.totalCallInteractions,
