@@ -151,7 +151,7 @@ function enrichTicket(tk){
   }else{tk.missingReason=tk.missingSubReason=tk.statusNotClosed=tk.pendingStatus=false;tk.compliant=false;}
 
   // FCR: Decagon-only + closed + has reason
-  tk.fcrAchieved=tk.isDecagonTicket&&!tk.csAssisted&&tk.aiInteractionCount===1&&!tk.shortIntervalFlag;
+  tk.fcrAchieved=false; // computed after computeShortIntervalDefects
 
   // Defects: same OGI + different ticket ID + same timestamp (handled at aggregate)
   const tsSet=new Set();let sameTs=0;
@@ -353,6 +353,10 @@ function processRows(rows,filename){
         setTimeout(()=>{
           STATE.ticketMap=map;STATE.filteredTickets=new Map(map);
           computeShortIntervalDefects(STATE.ticketMap);
+          // Recompute fcrAchieved now that shortIntervalFlag is correctly set
+          STATE.ticketMap.forEach(tk=>{
+            tk.fcrAchieved=tk.isDecagonTicket&&!tk.csAssisted&&tk.aiInteractionCount===1&&!tk.shortIntervalFlag;
+          });
           const m=computeMetrics(STATE.ticketMap);
           const allDates=[...map.values()].filter(t=>t.aiInteractionDate).map(t=>t.aiInteractionDate);
           if(allDates.length){const minD=allDates.reduce((a,b)=>a<b?a:b);const maxD=allDates.reduce((a,b)=>a>b?a:b);document.getElementById('globalDateFrom').value=minD;document.getElementById('globalDateTo').value=maxD;document.getElementById('dateRangeBar').style.display='flex';}
