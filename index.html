@@ -25,7 +25,6 @@
     <a class="nav-item" data-tab="kpis"><i class="fa-solid fa-gauge-high"></i><span>Executive KPIs</span></a>
     <a class="nav-item" data-tab="effectiveness"><i class="fa-solid fa-chart-line"></i><span>Effectiveness</span></a>
     <a class="nav-item" data-tab="fcr"><i class="fa-solid fa-bullseye"></i><span>FCR Analysis</span></a>
-    <a class="nav-item" data-tab="fcr"><i class="fa-solid fa-bullseye"></i><span>FCR Analysis</span></a>
     <a class="nav-item" data-tab="compliance"><i class="fa-solid fa-circle-check"></i><span>Compliance</span></a>
     <a class="nav-item" data-tab="defects"><i class="fa-solid fa-bug"></i><span>Defects</span></a>
     <a class="nav-item" data-tab="reasons"><i class="fa-solid fa-tags"></i><span>Reason Analysis</span></a>
@@ -135,27 +134,7 @@
       </div>
       <table id="fcrDrillTable" class="display nowrap" style="width:100%"></table>
     </div>
-    <div class="tab-panel" id="tab-fcr">
-      <div class="panel-header"><h2>FCR Analysis</h2><p>First Contact Resolution breakdown across all Decagon-handled tickets</p></div>
-      <div class="fcr-summary-row" id="fcrSummaryRow"></div>
-      <div class="fcr-body">
-        <div class="fcr-left">
-          <div class="chart-card"><div class="chart-hdr">Daily FCR Trend <span class="level-tag">Ticket</span></div><canvas id="fcrTrendChart"></canvas></div>
-          <div class="chart-card" style="margin-top:16px"><div class="chart-hdr">FCR Failure Breakdown <span class="level-tag">Ticket</span></div><canvas id="fcrFailChart"></canvas></div>
-        </div>
-        <div class="fcr-right">
-          <div class="panel-header" style="margin:0 0 8px 0"><h2 style="font-size:15px">Reason / Sub Reason Split</h2><p>FCR Met vs Not Met by contact reason</p></div>
-          <div id="fcrReasonTable"></div>
-        </div>
-      </div>
-      <div class="fcr-filter-row">
-        <select id="fcrFilterStatus" class="filter-input" style="width:160px"><option value="">All Tickets</option><option value="met">FCR Met</option><option value="notmet">FCR Not Met</option></select>
-        <select id="fcrFilterReason" class="filter-input" style="width:200px"><option value="">All Failure Reasons</option><option value="cs">CS Assisted</option><option value="multi">Multiple AI Calls</option><option value="short">Short Interval</option></select>
-        <button class="btn-apply-filter" id="fcrApplyFilter">Apply</button>
-      </div>
-      <table id="fcrDrillTable" class="display nowrap" style="width:100%"></table>
-    </div>
-    <div class="tab-panel" id="tab-compliance">
+        <div class="tab-panel" id="tab-compliance">
       <div class="panel-header"><h2>Decagon Compliance</h2><p>Based on 1,317 calls handled by Decagon only · Reason · Sub Reason · Status = Closed</p></div>
       <div class="compliance-top">
         <div class="gauge-wrap"><canvas id="complianceGauge" width="200" height="200"></canvas><div class="gauge-label"><span class="gauge-pct" id="gaugeCompPct">—</span><span class="gauge-sub">Compliance Rate</span></div></div>

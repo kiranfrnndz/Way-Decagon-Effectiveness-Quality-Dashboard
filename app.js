@@ -5,7 +5,7 @@ const CONFIG = {
   AI_TYPE: 'AI-Agent Call',
   INTERNAL: ['TL Review','Manager Review','QC Audit','Select','User Reviews','BBB Reviews','App Feedback','Escalation Handled by TL','Escalation handled by Escalation Team','Escalation handled by Manager','Escalation handled by Ops Team'],
   CUSTOMER_FACING: ['AI-Agent Call','Call','Email','Chat','SMS'],
-  EXCLUDED_REASONS: ['escalated','non escalated','not escalated',''],
+  EXCLUDED_REASONS: ['escalated','non escalated','not escalated','ai handled','ai-handled',''],
   DEFECT_THRESHOLD_SEC: 60
 };
 
@@ -166,15 +166,14 @@ function enrichTicket(tk){
   const r=(tk.reason||'').trim();
   tk.displayReason=(!excluded.includes(sr.toLowerCase())&&sr)?sr:(!excluded.includes(r.toLowerCase())&&r)?r:'';
 
-  // Use AI-Agent Call interaction date as the date bucket
-  // Customer can call at any time after ticket creation
-  const firstAIDate = firstAI ? (firstAI.parsedDate ? new Date(firstAI.parsedDate) : null) : null;
-  if(firstAIDate&&!isNaN(firstAIDate)){
-    tk.aiInteractionDate = firstAIDate.getFullYear()+"-"+(String(firstAIDate.getMonth()+1).padStart(2,"0"))+"-"+(String(firstAIDate.getDate()).padStart(2,"0"));
-    tk.dateBucket = tk.aiInteractionDate;
-  } else if(tk.createdDate){
-    const d=new Date(tk.interactions[0]?.parsedDate||tk.createdDate);
-    if(!isNaN(d)) tk.dateBucket=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  // Use parseDateStr to avoid timezone shift - all dates are PST
+  const firstAIDateStr = firstAI ? parseDateStr(firstAI.createdDate) : null;
+  if(firstAIDateStr){
+    tk.aiInteractionDate = firstAIDateStr;
+    tk.dateBucket = firstAIDateStr;
+  } else if(tk.interactions[0]?.createdDate){
+    const ds=parseDateStr(tk.interactions[0].createdDate);
+    if(ds) tk.dateBucket=ds;
   }
 }
 
@@ -353,9 +352,10 @@ function processRows(rows,filename){
         setTimeout(()=>{
           STATE.ticketMap=map;STATE.filteredTickets=new Map(map);
           computeShortIntervalDefects(STATE.ticketMap);
+          STATE.ticketMap.forEach(tk=>{tk.fcrAchieved=tk.isDecagonTicket&&!tk.csAssisted&&tk.aiInteractionCount===1&&!tk.shortIntervalFlag;});
           // Recompute fcrAchieved now that shortIntervalFlag is correctly set
           STATE.ticketMap.forEach(tk=>{
-            tk.fcrAchieved=tk.isDecagonTicket&&!tk.csAssisted&&tk.aiInteractionCount===1&&!tk.shortIntervalFlag;
+            tk.fcrAchieved=false; // recomputed after computeShortIntervalDefects
           });
           const m=computeMetrics(STATE.ticketMap);
           const allDates=[...map.values()].filter(t=>t.aiInteractionDate).map(t=>t.aiInteractionDate);
@@ -486,7 +486,7 @@ function renderKPIs(m){
   const kpis=[
     {label:'Calls Handled by Decagon',mainVal:fmt.num(m.decagonTickets),subVal:null,icon:'fa-robot',color:'cyan',tip:'Unique calls where Decagon (AI-Agent Call) was the first customer-facing interaction',lvl:'Ticket'},
     {label:'Interactions by Decagon',mainVal:fmt.num(m.totalAIInts),subVal:null,icon:'fa-comments',color:'purple',tip:'Total AI-Agent Call interaction records across all Decagon calls',lvl:'Interaction'},
-    {label:'Decagon FCR',mainVal:fmt.pct(m.fcrRate),subVal:fmt.num(m.fcrCount)+' calls',icon:'fa-bullseye',color:'green',tip:'Calls fully resolved by Decagon: no CS involvement + ticket closed + reason tagged. Base: '+fmt.num(m.decagonOnlyCount)+' Decagon-only calls',lvl:'Ticket'},
+    {label:'Decagon FCR',mainVal:fmt.pct(m.fcrRate),subVal:fmt.num(m.fcrCount)+' calls',icon:'fa-bullseye',color:'green',tip:'FCR Met: single Decagon interaction with no further CS involvement or repeat contact. Base: all '+fmt.num(m.decagonTickets)+' Decagon tickets',lvl:'Ticket'},
     {label:'Decagon Containment Rate',mainVal:fmt.pct(m.containmentRate),subVal:fmt.num(m.containedCount)+' calls',icon:'fa-shield-halved',color:'green',tip:'Calls where no CS agent was involved after Decagon. 1,785 - 468 = 1,317',lvl:'Ticket'},
     {label:'CS Assisted',mainVal:fmt.pct(m.csAssistedCount/m.decagonTickets*100),subVal:fmt.num(m.csAssistedCount)+' calls',icon:'fa-person-walking-arrow-right',color:'amber',tip:'Calls where a human CS agent had to handle after Decagon',lvl:'Ticket',pctLarge:true},
     {label:'Handled by Decagon Only',mainVal:fmt.num(m.decagonOnlyCount),subVal:fmt.pct(pct(m.decagonOnlyCount,m.decagonTickets)),icon:'fa-circle-check',color:'green',tip:'Calls handled entirely by Decagon with no CS agent involvement',lvl:'Ticket'},
@@ -538,8 +538,25 @@ function renderEffectivenessCharts(m){
 
   const base={responsive:true,maintainAspectRatio:true,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{color:text,font:{size:11}}},tooltip:{backgroundColor:'#fff',titleColor:'#0f172a',bodyColor:'#475569',borderColor:'#e2e8f0',borderWidth:1}},scales:{x:{ticks:{color:text,font:{size:10},maxRotation:45},grid:{color:grid}},y:{ticks:{color:text,font:{size:10}},grid:{color:grid},beginAtZero:true}}};
 
+  const decOnlyCounts=[...buckets.values()].map(ts=>ts.filter(t=>t.isDecagonTicket&&t.decagonOnly).length);
+  const csAssistedCounts=[...buckets.values()].map(ts=>ts.filter(t=>t.isDecagonTicket&&t.csAssisted).length);
+  const stackLabelPlugin={id:'stackLabels',afterDatasetsDraw(chart){
+    const ctx=chart.ctx;
+    chart.data.datasets.forEach((ds,di)=>{
+      chart.getDatasetMeta(di).data.forEach((bar,i)=>{
+        const v=ds.data[i];if(!v||v<1)return;
+        ctx.save();ctx.fillStyle='#fff';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+        const y=bar.y+(bar.base-bar.y)/2;
+        if(bar.base-bar.y>14)ctx.fillText(v,bar.x,y);
+        ctx.restore();
+      });
+    });
+  }};
   dChart('decagonTicketsTrend');
-  STATE.charts.decagonTicketsTrend=new Chart(document.getElementById('decagonTicketsTrend'),{type:'bar',data:{labels,datasets:[{label:'Calls Handled by Decagon',data:decCounts,backgroundColor:'rgba(2,132,199,0.6)',borderRadius:4}]},options:{...base}});
+  STATE.charts.decagonTicketsTrend=new Chart(document.getElementById('decagonTicketsTrend'),{type:'bar',data:{labels,datasets:[
+    {label:'Decagon Only',data:decOnlyCounts,backgroundColor:'rgba(2,132,199,0.6)'},
+    {label:'CS Assisted',data:csAssistedCounts,backgroundColor:'rgba(239,68,68,0.7)'}
+  ]},options:{...base,plugins:{...base.plugins,legend:{display:true,position:'top',labels:{color:text,font:{size:11}}}},scales:{...base.scales,x:{...base.scales?.x,stacked:true,ticks:{color:text,font:{size:10},maxRotation:45},grid:{color:grid}},y:{...base.scales?.y,stacked:true,ticks:{color:text,font:{size:10}},grid:{color:grid},beginAtZero:true}}},plugins:[stackLabelPlugin]});
 
   const csIntCounts=[...buckets.values()].map(ts=>ts.filter(t=>t.isDecagonTicket).reduce((s,t)=>s+t.humanInteractionCount,0));
   dChart('decagonIntsTrend');
@@ -980,7 +997,7 @@ function buildFCRTab(){
     const excl2=new Set(CONFIG.EXCLUDED_REASONS);
     const rgMap={};
     dec.forEach(t=>{
-      const r=(t.reason&&t.reason.trim()&&!excl2.has(t.reason.trim().toLowerCase()))?t.reason.trim():'(No Reason)';
+      const r=(t.displayReason&&t.displayReason.trim())?t.displayReason.trim():'(No Reason)';
       const sr2=(t.subReason&&t.subReason.trim()&&!excl2.has(t.subReason.trim().toLowerCase()))?t.subReason.trim():'(No Sub Reason)';
       if(!rgMap[r])rgMap[r]={met:0,notMet:0,subs:{}};
       t.fcrAchieved?rgMap[r].met++:rgMap[r].notMet++;
