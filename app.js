@@ -927,31 +927,66 @@ function clearDateFilter(){
 }
 
 // ── EXPORT ──
-function exportPDF(){
-  if(!STATE.filteredTickets.size){showToast('Upload data first','error');return;}
-  const{jsPDF}=window.jspdf,doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-  const m=computeMetrics(STATE.filteredTickets),now=new Date().toLocaleDateString('en-GB');
-  doc.setFillColor(15,23,42);doc.rect(0,0,210,35,'F');
-  doc.setTextColor(255,255,255);doc.setFontSize(16);doc.setFont('helvetica','bold');
-  doc.text('Way-Decagon AI Effectiveness & Quality Dashboard',15,16);
-  doc.setFontSize(9);doc.setTextColor(148,163,184);doc.text('Executive Export · '+now,15,26);
-  let y=48;doc.setTextColor(15,23,42);doc.setFontSize(12);doc.text('Executive KPI Summary',15,y);y+=8;
-  doc.autoTable({startY:y,head:[['KPI','Value']],body:[
-    ['Total Calls (Human + Decagon)',fmt.num(m.totalCallInts)],
-    ['Calls Routed to Decagon',fmt.num(m.decagonTickets)],
-    ['Calls Handled by Decagon Alone',fmt.num(m.decagonOnlyCount)],
-    ['Escalated to CS',fmt.num(m.csAssistedCount)+' ('+fmt.pct(m.csAssistedCount/m.decagonTickets*100)+')'],
-    ['Decagon FCR',fmt.pct(m.fcrRate)+' ('+fmt.num(m.fcrCount)+' calls)'],
-    ['Decagon Containment Rate',fmt.pct(m.containmentRate)],
-    ['Compliance Rate',fmt.pct(m.complianceRate)+' ('+fmt.num(m.compliantCount)+' calls)'],
-    ['Compliance Failures',fmt.num(m.complianceFailures)+' call tickets'],
-    ['Status Not Closed',fmt.num(m.statusNotClosed)+' call tickets'],
-    ['Duplicate Ticket Defects',fmt.num(m.dupTicketCount)],
-    ['Short Interval Interactions',fmt.num(m.shortIntervalInts)]
-  ],margin:{left:15,right:15},headStyles:{fillColor:[15,23,42],textColor:[255,255,255],fontSize:9},bodyStyles:{fontSize:9}});
-  doc.save('way_decagon_'+now.replace(/\//g,'-')+'.pdf');showToast('PDF exported','success');
-}
+function exportPDF() {
+  if (!STATE.filteredTickets.size) { showToast('Upload data first','error'); return; }
+  showToast('Generating PDF — please wait...', 'info');
 
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const pageW = 297, pageH = 210;
+  const now = new Date().toLocaleDateString('en-GB');
+
+  const tabs = ['kpis','effectiveness','compliance','defects','reasons','fcr','recontact','executive','tickets'];
+  const tabLabels = { kpis:'Executive KPIs', effectiveness:'Decagon Effectiveness', compliance:'Decagon Compliance', defects:'System Defects', reasons:'Reason Analysis', fcr:'FCR Analysis', recontact:'Re-contact Analysis', executive:'Executive Summary', tickets:'Master Tickets' };
+
+  const originalActive = document.querySelector('.nav-item.active')?.dataset?.tab || 'kpis';
+  let pageNum = 0;
+
+  async function captureTabs(tabList) {
+    for (const tabId of tabList) {
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      const navItem = document.querySelector('.nav-item[data-tab="' + tabId + '"]');
+      const panel = document.getElementById('tab-' + tabId);
+      if (!navItem || !panel) continue;
+      navItem.classList.add('active');
+      panel.classList.add('active');
+      document.getElementById('topbarTitle').textContent = tabLabels[tabId] || tabId;
+      if (tabId === 'fcr' && !STATE.fcrBuilt) { buildFCRTab(); STATE.fcrBuilt = true; }
+      await new Promise(r => setTimeout(r, 500));
+
+      const el = document.getElementById('mainWrapper');
+      const canvas = await html2canvas(el, { scale: 1.5, useCORS: true, logging: false, backgroundColor: '#f1f5f9' });
+      const imgData = canvas.toDataURL('image/jpeg', 0.85);
+
+      if (pageNum > 0) doc.addPage();
+      doc.setFillColor(15, 23, 42);
+      doc.rect(0, 0, pageW, 10, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.text('WAY-DECAGON DASHBOARD  |  ' + (tabLabels[tabId] || tabId).toUpperCase(), 6, 7);
+      doc.text(now, pageW - 6, 7, { align: 'right' });
+
+      const imgH = (canvas.height / canvas.width) * pageW;
+      const finalH = Math.min(imgH, pageH - 12);
+      doc.addImage(imgData, 'JPEG', 0, 11, pageW, finalH);
+      pageNum++;
+    }
+
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    const origNav = document.querySelector('.nav-item[data-tab="' + originalActive + '"]');
+    if (origNav) origNav.classList.add('active');
+    const origPanel = document.getElementById('tab-' + originalActive);
+    if (origPanel) origPanel.classList.add('active');
+
+    doc.save('way_decagon_' + now.replace(/\//g, '-') + '.pdf');
+    showToast('PDF exported — ' + pageNum + ' pages', 'success');
+  }
+
+  captureTabs(tabs).catch(err => { showToast('PDF error: ' + err.message, 'error'); console.error(err); });
+}
 function exportSummary(){
   if(!STATE.filteredTickets.size)return;
   const m=computeMetrics(STATE.filteredTickets);
