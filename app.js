@@ -11,7 +11,7 @@ const CONFIG = {
 
 const STATE = {
   rawRows:[], ticketMap:new Map(), filteredTickets:new Map(),
-  charts:{}, datatables:{}, colMap:{},
+  charts:{}, datatables:{}, colMap:{}, fcrBuilt:false, fcrDrillTable:null, fcrBuilt:false,
   currentReasonTab:'handled', reasonData:{},
   totalCallInteractions:0, totalAIInteractions:0
 };
@@ -151,7 +151,7 @@ function enrichTicket(tk){
   }else{tk.missingReason=tk.missingSubReason=tk.statusNotClosed=tk.pendingStatus=false;tk.compliant=false;}
 
   // FCR: Decagon-only + closed + has reason
-  tk.fcrAchieved=tk.isDecagonTicket&&tk.decagonOnly&&!tk.statusNotClosed&&(tk.subReason||tk.reason)?true:false;
+  tk.fcrAchieved=tk.isDecagonTicket&&!tk.csAssisted&&tk.aiInteractionCount===1&&!tk.shortIntervalFlag;
 
   // Defects: same OGI + different ticket ID + same timestamp (handled at aggregate)
   const tsSet=new Set();let sameTs=0;
@@ -872,6 +872,7 @@ function renderCEOSummary(m){
 function applyDateFilter(){
   const from=document.getElementById('globalDateFrom').value,to=document.getElementById('globalDateTo').value;
   STATE.filteredTickets=new Map();
+  STATE.fcrBuilt=false;
   STATE.ticketMap.forEach((tk,id)=>{
     // Use YYYY-MM-DD string comparison to avoid timezone issues
     const filterDate = tk.dateBucket || tk.aiInteractionDate;
@@ -925,8 +926,79 @@ function exportSummary(){
 }
 
 // ── NAV ──
+// ── FCR TAB ──
+function buildFCRTab(){
+  const dec=[...STATE.filteredTickets.values()].filter(t=>t.isDecagonTicket);
+  const met=dec.filter(t=>t.fcrAchieved);
+  const notMet=dec.filter(t=>!t.fcrAchieved);
+  const trueFCR=dec.filter(t=>t.fcrAchieved&&t.compliant);
+  const csAssisted=dec.filter(t=>t.csAssisted);
+  const multiAI=dec.filter(t=>!t.csAssisted&&t.aiInteractionCount>1);
+  const shortInt=dec.filter(t=>!t.csAssisted&&t.aiInteractionCount===1&&t.shortIntervalFlag);
+  const sr=document.getElementById('fcrSummaryRow');
+  if(!sr)return;
+  const fcrRate=dec.length?(met.length/dec.length*100).toFixed(1):0;
+  const trueFCRRate=dec.length?(trueFCR.length/dec.length*100).toFixed(1):0;
+  sr.innerHTML=`
+    <div class="kpi-card" style="border-top:3px solid #059669"><div class="kpi-label">FCR MET</div><div class="kpi-val" style="color:#059669">${fmt.num(met.length)}</div><div class="kpi-sub">${fcrRate}% of ${fmt.num(dec.length)} tickets</div></div>
+    <div class="kpi-card" style="border-top:3px solid #dc2626"><div class="kpi-label">FCR NOT MET</div><div class="kpi-val" style="color:#dc2626">${fmt.num(notMet.length)}</div><div class="kpi-sub">${(100-fcrRate).toFixed(1)}% of total</div></div>
+    <div class="kpi-card" style="border-top:3px solid #7c3aed"><div class="kpi-label">TRUE FCR (FCR + Compliant)</div><div class="kpi-val" style="color:#7c3aed">${fmt.num(trueFCR.length)}</div><div class="kpi-sub">${trueFCRRate}% of total</div></div>
+    <div class="kpi-card" style="border-top:3px solid #f59e0b"><div class="kpi-label">CS ASSISTED</div><div class="kpi-val" style="color:#f59e0b">${fmt.num(csAssisted.length)}</div><div class="kpi-sub">${dec.length?(csAssisted.length/dec.length*100).toFixed(1):0}% of total</div></div>
+    <div class="kpi-card" style="border-top:3px solid #3b82f6"><div class="kpi-label">MULTIPLE AI CALLS</div><div class="kpi-val" style="color:#3b82f6">${fmt.num(multiAI.length)}</div><div class="kpi-sub">${dec.length?(multiAI.length/dec.length*100).toFixed(1):0}% of total</div></div>`;
+  const{text,grid}=getCC();
+  const base={responsive:true,maintainAspectRatio:true,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{color:text,font:{size:11}}},tooltip:{backgroundColor:'#fff',titleColor:'#0f172a',bodyColor:'#475569',borderColor:'#e2e8f0',borderWidth:1}},scales:{x:{ticks:{color:text,font:{size:10},maxRotation:45},grid:{color:grid}},y:{ticks:{color:text,font:{size:10}},grid:{color:grid},beginAtZero:true}}};
+  const dateMap={};
+  dec.forEach(t=>{const d=t.dateBucket||'Unknown';if(!dateMap[d])dateMap[d]={met:0,total:0};dateMap[d].total++;if(t.fcrAchieved)dateMap[d].met++;});
+  const dates=Object.keys(dateMap).sort();
+  const fcrRates=dates.map(d=>dateMap[d].total?(dateMap[d].met/dateMap[d].total*100).toFixed(1):0);
+  setTimeout(()=>{
+    const ctx3=document.getElementById('fcrTrendChart');
+    if(ctx3){if(ctx3._chart)ctx3._chart.destroy();ctx3._chart=new Chart(ctx3,{type:'line',data:{labels:dates,datasets:[{label:'FCR %',data:fcrRates,borderColor:'#059669',backgroundColor:'rgba(5,150,105,0.1)',fill:true,tension:0.4,pointRadius:3}]},options:{...base,scales:{x:base.scales.x,y:{...base.scales.y,ticks:{...base.scales.y.ticks,callback:v=>v+'%'},max:100}}}});}
+    const ctx4=document.getElementById('fcrFailChart');
+    if(ctx4){if(ctx4._chart)ctx4._chart.destroy();ctx4._chart=new Chart(ctx4,{type:'doughnut',data:{labels:['CS Assisted','Multiple AI Calls','Short Interval'],datasets:[{data:[csAssisted.length,multiAI.length,shortInt.length],backgroundColor:['#f59e0b','#3b82f6','#ef4444'],borderWidth:2}]},options:{...base,plugins:{...base.plugins,legend:{display:true,position:'bottom'}}}});}
+    const excl2=CONFIG.EXCLUDED_REASONS;
+    const rgMap={};
+    dec.forEach(t=>{
+      const r=(t.reason&&t.reason.trim()&&!excl2.has(t.reason.trim().toLowerCase()))?t.reason.trim():'(No Reason)';
+      const sr2=(t.subReason&&t.subReason.trim()&&!excl2.has(t.subReason.trim().toLowerCase()))?t.subReason.trim():'(No Sub Reason)';
+      if(!rgMap[r])rgMap[r]={met:0,notMet:0,subs:{}};
+      t.fcrAchieved?rgMap[r].met++:rgMap[r].notMet++;
+      if(!rgMap[r].subs[sr2])rgMap[r].subs[sr2]={met:0,notMet:0};
+      t.fcrAchieved?rgMap[r].subs[sr2].met++:rgMap[r].subs[sr2].notMet++;
+    });
+    const rtDiv=document.getElementById('fcrReasonTable');
+    if(rtDiv){
+      const html2=Object.entries(rgMap).sort((a,b)=>(b[1].met+b[1].notMet)-(a[1].met+a[1].notMet)).map(([reason,g])=>{
+        const uid='u'+Math.random().toString(36).slice(2,8);
+        const subs=Object.entries(g.subs).sort((a,b)=>(b[1].met+b[1].notMet)-(a[1].met+a[1].notMet)).map(([sr3,v])=>`<tr class="sr_${uid}" style="display:none;background:#f8fafc"><td style="padding-left:2rem;color:#64748b;font-size:11px">\u21b3 ${sr3}</td><td><span class="fcr-met-badge">${v.met}</span></td><td><span class="fcr-fail-badge">${v.notMet}</span></td><td>${v.met+v.notMet}</td></tr>`).join('');
+        return `<tr style="cursor:pointer;font-weight:500" onclick="this.parentNode.querySelectorAll('.sr_${uid}').forEach(s=>s.style.display=s.style.display==='none'?'':'none');this.querySelector('span.arr').textContent=this.querySelector('span.arr').textContent==='\u25b6'?'\u25bc':'\u25b6'"><td><span class="arr" style="font-size:10px;color:#94a3b8;margin-right:4px">\u25b6</span>${reason} <span style="font-size:10px;color:#94a3b8;font-weight:400">(${Object.keys(g.subs).length})</span></td><td><span class="fcr-met-badge">${g.met}</span></td><td><span class="fcr-fail-badge">${g.notMet}</span></td><td>${g.met+g.notMet}</td></tr>${subs}`;
+      }).join('');
+      rtDiv.innerHTML=`<table class="fcr-reason-table" style="width:100%"><thead><tr><th>Reason (click to expand)</th><th>FCR Met</th><th>Not Met</th><th>Total</th></tr></thead><tbody>${html2}</tbody></table>`;
+    }
+    if(STATE.fcrDrillTable){try{STATE.fcrDrillTable.destroy();}catch(e){}STATE.fcrDrillTable=null;}
+    const statusFilter=document.getElementById('fcrFilterStatus')?.value||'';
+    const reasonFilter=document.getElementById('fcrFilterReason')?.value||'';
+    let filtered=dec;
+    if(statusFilter==='met')filtered=filtered.filter(t=>t.fcrAchieved);
+    if(statusFilter==='notmet')filtered=filtered.filter(t=>!t.fcrAchieved);
+    if(reasonFilter==='cs')filtered=filtered.filter(t=>t.csAssisted);
+    if(reasonFilter==='multi')filtered=filtered.filter(t=>!t.csAssisted&&t.aiInteractionCount>1);
+    if(reasonFilter==='short')filtered=filtered.filter(t=>!t.csAssisted&&t.aiInteractionCount===1&&t.shortIntervalFlag);
+    const failReason=t=>{if(t.fcrAchieved)return'—';if(t.csAssisted)return'CS Assisted';if(t.aiInteractionCount>1)return'Multiple AI Calls';if(t.shortIntervalFlag)return'Short Interval';return'Other';};
+    STATE.fcrDrillTable=new DataTable('#fcrDrillTable',{data:filtered,destroy:true,deferRender:true,pageLength:25,columns:[
+      {title:'Ticket ID',data:'ticketId'},{title:'Date',data:'dateBucket'},
+      {title:'FCR',data:'fcrAchieved',render:d=>d?'<span class="fcr-met-badge">MET</span>':'<span class="fcr-fail-badge">NOT MET</span>'},
+      {title:'Failure Reason',data:null,render:(d,t,r)=>failReason(r)},
+      {title:'Reason',data:'reason',render:d=>d||'\u2014'},{title:'Sub Reason',data:'subReason',render:d=>d||'\u2014'},
+      {title:'Status',data:'status',render:d=>d||'\u2014'},{title:'AI Interactions',data:'aiInteractionCount'}
+    ]});
+    const fcrApplyBtn=document.getElementById('fcrApplyFilter');
+    if(fcrApplyBtn)fcrApplyBtn.onclick=buildFCRTab;
+  },50);
+}
+
 function setupNav(){
-  const TITLES={upload:'Data Source',kpis:'Executive KPIs',effectiveness:'Decagon Effectiveness',compliance:'Decagon Compliance',defects:'System Defects',reasons:'Reason Analysis',executive:'Executive Summary',validation:'Data Validation',tickets:'Master Tickets',recontact:'Re-contact Analysis'};
+  const TITLES={upload:'Data Source',kpis:'Executive KPIs',effectiveness:'Decagon Effectiveness',fcr:'FCR Analysis',compliance:'Decagon Compliance',defects:'System Defects',reasons:'Reason Analysis',executive:'Executive Summary',validation:'Data Validation',tickets:'Master Tickets',recontact:'Re-contact Analysis'};
   document.querySelectorAll('.nav-item').forEach(item=>{
     item.addEventListener('click',()=>{
       document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
@@ -935,6 +1007,8 @@ function setupNav(){
       const tab=item.dataset.tab;
       document.getElementById('tab-'+tab)?.classList.add('active');
       document.getElementById('topbarTitle').textContent=TITLES[tab]||tab;
+      if(tab==='fcr'){if(!STATE.fcrBuilt){buildFCRTab();STATE.fcrBuilt=true;}}
+      if(tab==='fcr'){if(!STATE.fcrBuilt){buildFCRTab();STATE.fcrBuilt=true;}}
     });
   });
   document.getElementById('sidebarToggle').addEventListener('click',()=>{
