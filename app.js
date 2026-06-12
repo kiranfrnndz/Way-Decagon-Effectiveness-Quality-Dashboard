@@ -50,6 +50,17 @@ function parseDate(d){
   return isNaN(dt)?null:dt.getTime();
 }
 
+// ── SAFE DATE STRING PARSER (PST only, no timezone conversion) ──
+function parseDateStr(d){
+  if(!d)return null;
+  const s=String(d).trim();
+  const m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if(m)return m[3]+'-'+String(m[1]).padStart(2,'0')+'-'+String(m[2]).padStart(2,'0');
+  const m2=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m2)return m2[1]+'-'+m2[2]+'-'+m2[3];
+  return null;
+}
+
 // ── COLUMN MAP ──
 const COL_C={ticketId:['Ticket ID','ticket_id'],ogi:['OGI','ogi'],interaction:['Interaction','Interaction Type'],intDate:['Interaction date','Interaction Date','Created Date'],intId:['Interaction ID'],reason:['TKT_IssueReason','Reason'],subReason:['Sub Reason','sub_reason'],action:['Action','Action Taken'],status:['Status'],agent:['Agent Name'],vertical:['Vertical'],subVertical:['SubVertical','Sub Vertical'],ticketCreatedDate:['Ticket_created_date','Ticket Created Date']};
 function buildColMap(headers){const m={};Object.entries(COL_C).forEach(([k,cs])=>{m[k]=cs.find(c=>headers.find(h=>h&&h.trim().toLowerCase()===c.toLowerCase()))||null;});return m;}
@@ -212,9 +223,8 @@ function computeMetrics(ticketMap){
   STATE.rawRows.forEach(row=>{
     const rawDate=cm.intDate?row[cm.intDate]:'';
     if(rawDate){
-      const d=new Date(rawDate);
-      if(isNaN(d))return;
-      const ds=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      const ds=parseDateStr(rawDate);
+      if(!ds)return;
       if(from&&ds<from)return;
       if(to&&ds>to)return;
     }
@@ -336,7 +346,7 @@ function processRows(rows,filename){
       const tid=getV(row,cm.ticketId);if(!tid)return;
       if(!map.has(tid))map.set(tid,{ticketId:tid,ogi:getV(row,cm.ogi)||'UNKNOWN',createdDate:getV(row,cm.ticketCreatedDate)||getV(row,cm.intDate),reason:getV(row,cm.reason),subReason:getV(row,cm.subReason),actionTaken:getV(row,cm.action),status:getV(row,cm.status),vertical:getV(row,cm.vertical),subVertical:getV(row,cm.subVertical),interactions:[]});
       const tk=map.get(tid);
-      tk.interactions.push({interactionId:getV(row,cm.intId),type:getV(row,cm.interaction),createdDate:getV(row,cm.intDate),parsedDate:parseDate(getV(row,cm.intDate)),reason:getV(row,cm.reason),subReason:getV(row,cm.subReason),actionTaken:getV(row,cm.action),agent:getV(row,cm.agent),status:getV(row,cm.status)});
+      tk.interactions.push({interactionId:getV(row,cm.intId),type:getV(row,cm.interaction),createdDate:getV(row,cm.intDate),dateStr:parseDateStr(getV(row,cm.intDate)),parsedDate:parseDate(getV(row,cm.intDate)),reason:getV(row,cm.reason),subReason:getV(row,cm.subReason),actionTaken:getV(row,cm.action),agent:getV(row,cm.agent),status:getV(row,cm.status)});
       if(!tk.reason&&getV(row,cm.reason))tk.reason=getV(row,cm.reason);
       if(!tk.subReason&&getV(row,cm.subReason))tk.subReason=getV(row,cm.subReason);
       if(!tk.actionTaken&&getV(row,cm.action))tk.actionTaken=getV(row,cm.action);
