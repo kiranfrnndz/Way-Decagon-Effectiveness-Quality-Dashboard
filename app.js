@@ -541,8 +541,25 @@ function renderEffectivenessCharts(m){
   dChart('decagonTicketsTrend');
   STATE.charts.decagonTicketsTrend=new Chart(document.getElementById('decagonTicketsTrend'),{type:'bar',data:{labels,datasets:[{label:'Calls Handled by Decagon',data:decCounts,backgroundColor:'rgba(2,132,199,0.6)',borderRadius:4}]},options:{...base}});
 
+  const csIntCounts=[...buckets.values()].map(ts=>ts.filter(t=>t.isDecagonTicket).reduce((s,t)=>s+t.humanInteractionCount,0));
   dChart('decagonIntsTrend');
-  STATE.charts.decagonIntsTrend=new Chart(document.getElementById('decagonIntsTrend'),{type:'bar',data:{labels,datasets:[{label:'Interactions by Decagon',data:intCounts,backgroundColor:'rgba(124,58,237,0.6)',borderRadius:4}]},options:{...base}});
+  const stackLabelPlugin2={id:'stackLabels2',afterDatasetsDraw(chart){
+    const ctx=chart.ctx;
+    chart.data.datasets.forEach((ds,di)=>{
+      chart.getDatasetMeta(di).data.forEach((bar,i)=>{
+        const v=ds.data[i];
+        if(!v||v<1)return;
+        ctx.save();ctx.fillStyle='#fff';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+        const y=bar.y+(bar.base-bar.y)/2;
+        if(bar.base-bar.y>14)ctx.fillText(v,bar.x,y);
+        ctx.restore();
+      });
+    });
+  }};
+  STATE.charts.decagonIntsTrend=new Chart(document.getElementById('decagonIntsTrend'),{type:'bar',data:{labels,datasets:[
+    {label:'AI Interactions',data:intCounts,backgroundColor:'rgba(124,58,237,0.6)'},
+    {label:'CS Interactions',data:csIntCounts,backgroundColor:'rgba(239,68,68,0.7)'}
+  ]},options:{...base,plugins:{...base.plugins,legend:{display:true,position:'top',labels:{color:text,font:{size:11}}}},scales:{...base.scales,x:{...base.scales?.x,stacked:true,ticks:{color:text,font:{size:10},maxRotation:45},grid:{color:grid}},y:{...base.scales?.y,stacked:true,ticks:{color:text,font:{size:10}},grid:{color:grid},beginAtZero:true}}},plugins:[stackLabelPlugin2]});
 
   dChart('fcrTrend');
   STATE.charts.fcrTrend=new Chart(document.getElementById('fcrTrend'),{type:'line',data:{labels,datasets:[{label:'Decagon FCR %',data:fcrRates,borderColor:'#059669',backgroundColor:'rgba(5,150,105,0.1)',fill:true,tension:0.4,pointRadius:3}]},options:{...base,scales:{x:{ticks:{color:text,font:{size:10},maxRotation:45},grid:{color:grid}},y:{ticks:{color:text,font:{size:10},callback:v=>v+'%'},grid:{color:grid},beginAtZero:true,max:100}}}});
@@ -821,7 +838,7 @@ function renderCEOSummary(m){
   const obs=[];
   obs.push(`Decagon handled <strong>${fmt.num(m.decagonTickets)} calls</strong> out of <strong>${fmt.num(m.totalCallInts)} total calls</strong> — representing <strong>${fmt.pct(decagonShareOfCalls)}</strong> of all voice interactions in the CRM.`);
   obs.push(`Of ${fmt.num(m.decagonTickets)} calls routed to Decagon, <strong>${fmt.num(callsHandledAlone)} (${fmt.pct(pctHandledAlone)})</strong> were handled by Decagon alone without CS involvement.`);
-  obs.push(`Only <strong>${fmt.num(m.fcrCount)} call tickets (${fmt.pct(m.fcrRate)})</strong> were fully resolved and closed by Decagon — indicating the API is not closing tickets after handling calls.`);
+  obs.push(`<strong>${fmt.num(m.fcrCount)} tickets (${fmt.pct(m.fcrRate)})</strong> met FCR — single Decagon interaction with no further contact from the customer. Remaining <strong>${fmt.num(m.decagonTickets-m.fcrCount)}</strong> tickets had CS involvement, multiple AI interactions, or repeat contacts.`);
   obs.push(`<strong>${fmt.num(m.statusNotClosed)} call tickets are not closed</strong> after Decagon interaction — this is a Decagon API integration issue, not an agent issue.`);
 
   // What is working
@@ -960,7 +977,7 @@ function buildFCRTab(){
     if(ctx3){if(ctx3._chart)ctx3._chart.destroy();ctx3._chart=new Chart(ctx3,{type:'line',data:{labels:dates,datasets:[{label:'FCR %',data:fcrRates,borderColor:'#059669',backgroundColor:'rgba(5,150,105,0.1)',fill:true,tension:0.4,pointRadius:3}]},options:{...base,scales:{x:base.scales.x,y:{...base.scales.y,ticks:{...base.scales.y.ticks,callback:v=>v+'%'},max:100}}}});}
     const ctx4=document.getElementById('fcrFailChart');
     if(ctx4){if(ctx4._chart)ctx4._chart.destroy();ctx4._chart=new Chart(ctx4,{type:'doughnut',data:{labels:['CS Assisted','Multiple AI Calls','Short Interval'],datasets:[{data:[csAssisted.length,multiAI.length,shortInt.length],backgroundColor:['#f59e0b','#3b82f6','#ef4444'],borderWidth:2}]},options:{...base,plugins:{...base.plugins,legend:{display:true,position:'bottom'}}}});}
-    const excl2=CONFIG.EXCLUDED_REASONS;
+    const excl2=new Set(CONFIG.EXCLUDED_REASONS);
     const rgMap={};
     dec.forEach(t=>{
       const r=(t.reason&&t.reason.trim()&&!excl2.has(t.reason.trim().toLowerCase()))?t.reason.trim():'(No Reason)';
