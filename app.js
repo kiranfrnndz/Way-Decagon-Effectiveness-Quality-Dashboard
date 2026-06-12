@@ -352,7 +352,7 @@ function processRows(rows,filename){
         setTimeout(()=>{
           STATE.ticketMap=map;STATE.filteredTickets=new Map(map);
           computeShortIntervalDefects(STATE.ticketMap);
-          STATE.ticketMap.forEach(tk=>{tk.fcrAchieved=tk.isDecagonTicket&&!tk.csAssisted&&tk.aiInteractionCount===1&&!tk.shortIntervalFlag;});
+          STATE.ticketMap.forEach(tk=>{tk.fcrAchieved=tk.isDecagonTicket&&!tk.csAssisted&&tk.aiInteractionCount===1&&!tk.shortIntervalFlag;});const _d={t:0,nd:0,cs:0,ma:0,si:0,p:0};STATE.ticketMap.forEach(tk=>{_d.t++;if(!tk.isDecagonTicket){_d.nd++;return;}if(tk.fcrAchieved)_d.p++;else if(tk.csAssisted)_d.cs++;else if(tk.aiInteractionCount>1)_d.ma++;else if(tk.shortIntervalFlag)_d.si++;});console.log("[FCR DEBUG]",_d);STATE._fcrDebug=_d;
           // Recompute fcrAchieved now that shortIntervalFlag is correctly set
           STATE.ticketMap.forEach(tk=>{
             tk.fcrAchieved=false; // recomputed after computeShortIntervalDefects
