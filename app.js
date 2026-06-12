@@ -862,10 +862,11 @@ function applyDateFilter(){
   const from=document.getElementById('globalDateFrom').value,to=document.getElementById('globalDateTo').value;
   STATE.filteredTickets=new Map();
   STATE.ticketMap.forEach((tk,id)=>{
-    // Use AI interaction date for filtering if available, else ticket created date
-    const filterDate = tk.aiInteractionDate || tk.createdDate;
-    if(from){const d=new Date(filterDate);if(!isNaN(d)&&d<new Date(from))return;}
-    if(to){const d=new Date(filterDate);if(!isNaN(d)&&d>new Date(to+'T23:59:59'))return;}
+    // Use YYYY-MM-DD string comparison to avoid timezone issues
+    const filterDate = tk.dateBucket || tk.aiInteractionDate;
+    if(!filterDate)return;
+    if(from&&filterDate<from)return;
+    if(to&&filterDate>to)return;
     STATE.filteredTickets.set(id,tk);
   });
   renderDashboard();showToast('Filter applied — '+fmt.num(STATE.filteredTickets.size)+' tickets','info');
