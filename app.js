@@ -244,7 +244,7 @@ function computeMetrics(ticketMap){
     decagonOnlyCount:decOnlyCount,
     csAssistedCount,
     containedCount,containmentRate:pct(containedCount,decCount),
-    fcrCount,fcrRate:pct(fcrCount,decOnlyCount),
+    fcrCount,fcrRate:pct(fcrCount,decCount),
     compliantCount,complianceRate:pct(compliantCount,decOnlyCount),
     complianceFailures:decOnlyCount-compliantCount,
     missingReason,missingSubReason,statusNotClosed,pendingStatus,
