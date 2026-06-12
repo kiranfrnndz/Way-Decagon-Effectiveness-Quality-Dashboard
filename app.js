@@ -203,13 +203,26 @@ function computeMetrics(ticketMap){
   });
   const dupTicketCount=Object.values(ogiTimestampMap).filter(s=>s.size>1).length;
 
-  // Calculate filtered totals from filtered ticket map
-  const filteredAIInts=all.reduce((s,t)=>s+t.aiInteractionCount,0);
-  // For total calls in filtered range, count from raw rows matching date range
-  const filteredHumanCallInts=all.reduce((s,t)=>s+t.humanInteractionCount,0);
-  const filteredTotalCallInts=filteredAIInts+filteredHumanCallInts;
-  // Total records = all interactions from filtered tickets
-  const filteredTotalRecords=all.reduce((s,t)=>s+t.interactions.length+t.internalInteractionCount,0);
+  // Calculate filtered totals from rawRows filtered by date range
+  const from=document.getElementById('globalDateFrom')?document.getElementById('globalDateFrom').value:'';
+  const to=document.getElementById('globalDateTo')?document.getElementById('globalDateTo').value:'';
+  const cm=STATE.colMap;
+  let filteredTotalRecords=0,filteredTotalCallInts=0,filteredAIInts=0;
+  const CALL_TYPES=['Call','AI-Agent Call'];
+  STATE.rawRows.forEach(row=>{
+    const rawDate=cm.intDate?row[cm.intDate]:'';
+    if(rawDate){
+      const d=new Date(rawDate);
+      if(isNaN(d))return;
+      const ds=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      if(from&&ds<from)return;
+      if(to&&ds>to)return;
+    }
+    filteredTotalRecords++;
+    const itype=cm.interaction?row[cm.interaction]:'';
+    if(CALL_TYPES.includes(itype))filteredTotalCallInts++;
+    if(itype==='AI-Agent Call')filteredAIInts++;
+  });
 
   return{
     totalRecords:filteredTotalRecords||STATE.rawRows.length,
