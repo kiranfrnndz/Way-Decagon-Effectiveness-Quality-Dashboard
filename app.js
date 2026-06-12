@@ -956,7 +956,10 @@ function exportPDF() {
       await new Promise(r => setTimeout(r, 500));
 
       const el = document.getElementById('mainWrapper');
-      const canvas = await html2canvas(el, { scale: 1.5, useCORS: true, logging: false, backgroundColor: '#f1f5f9' });
+      const prevOverflow = el.style.overflow;
+      el.style.overflow = 'visible';
+      const canvas = await html2canvas(el, { scale: 1.2, useCORS: true, logging: false, backgroundColor: '#f1f5f9', windowWidth: 1400, scrollX: 0, scrollY: 0 });
+      el.style.overflow = prevOverflow;
       const imgData = canvas.toDataURL('image/jpeg', 0.85);
 
       if (pageNum > 0) doc.addPage();
