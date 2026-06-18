@@ -1060,19 +1060,84 @@ function buildTrendsTab() {
 
     const mBtn=m=>`<button onclick="window._tMode('${m}')" style="padding:6px 14px;font-size:12px;font-weight:500;border:${mode===m?'0.5px solid var(--color-border-secondary)':'none'};background:${mode===m?'var(--color-background-primary)':'transparent'};color:${mode===m?'var(--color-text-primary)':'var(--color-text-secondary)'};border-radius:6px;cursor:pointer">${m.charAt(0).toUpperCase()+m.slice(1)}</button>`;
 
-    let h=`<div style="padding:1.5rem">
+    // Build sparkline data from ALL buckets
+    const sparkKeys = Object.keys(B).sort();
+    const sparkTotal = sparkKeys.map(k=>B[k].totalCalls||0);
+    const sparkCS = sparkKeys.map(k=>B[k].csCalls||0);
+    const sparkDec = sparkKeys.map(k=>B[k].decCalls||0);
+
+    // SVG sparkline helper
+    function sparkline(data, color) {
+      if (!data.length) return '';
+      const w=120,h=40,pad=4;
+      const max=Math.max(...data)||1, min=Math.min(...data);
+      const range=max-min||1;
+      const pts=data.map((v,i)=>{
+        const x=pad+(i/(data.length-1||1))*(w-pad*2);
+        const y=h-pad-(v-min)/range*(h-pad*2);
+        return x+','+y;
+      });
+      return `<svg width="${w}" height="${h}" style="overflow:visible"><polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${pts[pts.length-1].split(',')[0]}" cy="${pts[pts.length-1].split(',')[1]}" r="3" fill="${color}"/></svg>`;
+    }
+
+    // Period-over-period delta for KPI tiles (compare current visible period vs previous same-length period)
+    const prevKeys = sparkKeys.slice(Math.max(0,sparkKeys.indexOf(cols[0])-cols.length), sparkKeys.indexOf(cols[0]));
+    const prevTotP = prevKeys.reduce((s,k)=>s+(B[k]?.totalCalls||0),0);
+    const prevCsP = prevKeys.reduce((s,k)=>s+(B[k]?.csCalls||0),0);
+    const prevDecP = prevKeys.reduce((s,k)=>s+(B[k]?.decCalls||0),0);
+
+    function kpiDelta(curr, prev) {
+      if (!prev) return '';
+      const pct2 = ((curr-prev)/prev*100);
+      const col = pct2>=0?'#059669':'#dc2626';
+      const arr = pct2>=0?'▲':'▼';
+      return `<span style="font-size:12px;font-weight:600;color:${col}">${arr} ${Math.abs(pct2).toFixed(1)}%</span> <span style="font-size:11px;color:#94a3b8">vs prior period</span>`;
+    }
+
+    let h=`<div style="padding:1.5rem;background:#f8fffe;min-height:100%">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:20px">
-      <div style="display:flex;gap:4px;background:var(--color-background-secondary);padding:4px;border-radius:8px;border:0.5px solid var(--color-border-tertiary)">${['daily','weekly','monthly','yearly'].map(mBtn).join('')}</div>
+      <div style="display:flex;gap:4px;background:#fff;padding:4px;border-radius:8px;border:1px solid #cce8e8;box-shadow:0 1px 4px rgba(13,148,136,0.08)">${['daily','weekly','monthly','yearly'].map(mBtn).join('')}</div>
       <div style="display:flex;align-items:center;gap:10px">
-        <button onclick="window._tNav(-1)" style="width:32px;height:32px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);border-radius:8px;cursor:pointer;font-size:16px;color:var(--color-text-primary)">←</button>
-        <span style="font-size:14px;font-weight:500;color:var(--color-text-primary);min-width:220px;text-align:center">${pLabel}</span>
-        <button onclick="window._tNav(1)" style="width:32px;height:32px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);border-radius:8px;cursor:pointer;font-size:16px;color:var(--color-text-primary)">→</button>
+        <button onclick="window._tNav(-1)" style="width:32px;height:32px;border:1px solid #cce8e8;background:#fff;border-radius:8px;cursor:pointer;font-size:16px;color:#0d9488;font-weight:600">←</button>
+        <span style="font-size:13px;font-weight:600;color:#0f172a;min-width:220px;text-align:center">${pLabel}</span>
+        <button onclick="window._tNav(1)" style="width:32px;height:32px;border:1px solid #cce8e8;background:#fff;border-radius:8px;cursor:pointer;font-size:16px;color:#0d9488;font-weight:600">→</button>
       </div>
+      <span style="font-size:11px;color:#94a3b8;font-style:italic">Comparing to prior period</span>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
-      <div style="background:var(--color-background-secondary);border-radius:10px;padding:16px 18px;border-top:3px solid #185FA5"><div style="font-size:11px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Total calls handled</div><div style="font-size:28px;font-weight:500;color:var(--color-text-primary)">${fmt(totP)}</div><div style="font-size:12px;color:var(--color-text-secondary);margin-top:2px">Period total</div></div>
-      <div style="background:var(--color-background-secondary);border-radius:10px;padding:16px 18px;border-top:3px solid #3B6D11"><div style="font-size:11px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Calls handled by CS</div><div style="font-size:28px;font-weight:500;color:#3B6D11">${fmt(csP)}</div><div style="font-size:12px;color:var(--color-text-secondary);margin-top:2px">${pct(csP,totP)} of total</div></div>
-      <div style="background:var(--color-background-secondary);border-radius:10px;padding:16px 18px;border-top:3px solid #534AB7"><div style="font-size:11px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Calls handled by Decagon</div><div style="font-size:28px;font-weight:500;color:#534AB7">${fmt(decP)}</div><div style="font-size:12px;color:var(--color-text-secondary);margin-top:2px">${pct(decP,totP)} of total</div></div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px">
+      <div style="background:#fff;border-radius:12px;padding:20px;border:1px solid #cce8e8;box-shadow:0 2px 8px rgba(13,148,136,0.08);display:flex;flex-direction:column;gap:4px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="font-size:10px;font-weight:700;color:#0d9488;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Total calls handled</div>
+            <div style="font-size:32px;font-weight:800;color:#0f172a;line-height:1;font-family:monospace">${fmt(totP)}</div>
+            <div style="font-size:12px;color:#64748b;margin-top:4px">Full dataset total</div>
+          </div>
+          <div style="opacity:0.7">${sparkline(sparkTotal,'#0d9488')}</div>
+        </div>
+        <div style="margin-top:8px">${kpiDelta(totP,prevTotP)}</div>
+      </div>
+      <div style="background:#fff;border-radius:12px;padding:20px;border:1px solid #cce8e8;box-shadow:0 2px 8px rgba(13,148,136,0.08);display:flex;flex-direction:column;gap:4px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="font-size:10px;font-weight:700;color:#059669;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Calls handled by CS</div>
+            <div style="font-size:32px;font-weight:800;color:#059669;line-height:1;font-family:monospace">${fmt(csP)}</div>
+            <div style="font-size:12px;color:#64748b;margin-top:4px">${pct(csP,totP)} of total calls</div>
+          </div>
+          <div style="opacity:0.7">${sparkline(sparkCS,'#059669')}</div>
+        </div>
+        <div style="margin-top:8px">${kpiDelta(csP,prevCsP)}</div>
+      </div>
+      <div style="background:#fff;border-radius:12px;padding:20px;border:1px solid #cce8e8;box-shadow:0 2px 8px rgba(13,148,136,0.08);display:flex;flex-direction:column;gap:4px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="font-size:10px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Calls handled by Decagon</div>
+            <div style="font-size:32px;font-weight:800;color:#7c3aed;line-height:1;font-family:monospace">${fmt(decP)}</div>
+            <div style="font-size:12px;color:#64748b;margin-top:4px">${pct(decP,totP)} of total calls</div>
+          </div>
+          <div style="opacity:0.7">${sparkline(sparkDec,'#7c3aed')}</div>
+        </div>
+        <div style="margin-top:8px">${kpiDelta(decP,prevDecP)}</div>
+      </div>
     </div>
     <div style="overflow-x:auto;border-radius:10px;border:0.5px solid var(--color-border-tertiary);box-shadow:0 1px 3px rgba(0,0,0,0.06)">
     <table style="width:100%;border-collapse:collapse;font-size:14px;table-layout:fixed">
