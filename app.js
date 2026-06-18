@@ -145,10 +145,11 @@ function enrichTicket(tk){
   if(tk.isDecagonTicket&&tk.decagonOnly){
     tk.missingReason=!tk.reason;
     tk.missingSubReason=!tk.subReason;
+    tk.missingAction=!tk.actionTaken;
     tk.statusNotClosed=tk.status.toLowerCase()!=='closed';
     tk.pendingStatus=['in progress','waiting for ops'].includes(tk.status.toLowerCase());
-    tk.compliant=!tk.missingReason&&!tk.missingSubReason&&!tk.statusNotClosed;
-  }else{tk.missingReason=tk.missingSubReason=tk.statusNotClosed=tk.pendingStatus=false;tk.compliant=false;}
+    tk.compliant=!tk.missingReason&&!tk.missingSubReason&&!tk.missingAction&&!tk.statusNotClosed;
+  }else{tk.missingReason=tk.missingSubReason=tk.missingAction=tk.statusNotClosed=tk.pendingStatus=false;tk.compliant=false;}
 
   // FCR: Decagon-only + closed + has reason
   tk.fcrAchieved=false; // computed after computeShortIntervalDefects
@@ -190,6 +191,7 @@ function computeMetrics(ticketMap){
   const compliantCount=decOnly.filter(t=>t.compliant).length; // 34
   const missingReason=decOnly.filter(t=>t.missingReason).length;
   const missingSubReason=decOnly.filter(t=>t.missingSubReason).length;
+  const missingAction=decOnly.filter(t=>t.missingAction).length;
   const statusNotClosed=decOnly.filter(t=>t.statusNotClosed).length;
   const pendingStatus=decOnly.filter(t=>t.pendingStatus).length;
   const sameTimestampInts=dec.reduce((s,t)=>s+t.sameTimestampInteractions,0);
@@ -234,10 +236,16 @@ function computeMetrics(ticketMap){
     if(itype==='AI-Agent Call')filteredAIInts++;
   });
 
+  const _totalAI=filteredAIInts||STATE.totalAIInteractions;
+  const avgAIPerTicket=decCount?(_totalAI/decCount):0;
+  const multiAIDec=dec.filter(t=>t.aiInteractionCount>1).length;
+  const repeatRate=decCount?(multiAIDec/decCount*100):0;
+  const oneInX=repeatRate>0?Math.round(100/repeatRate):0;
   return{
     totalRecords:filteredTotalRecords||STATE.rawRows.length,
     totalCallInts:filteredTotalCallInts||STATE.totalCallInteractions,
-    totalAIInts:filteredAIInts||STATE.totalAIInteractions,
+    totalAIInts:_totalAI,
+    avgAIPerTicket,repeatRate,oneInX,multiAIDec,
     totalTickets:all.length,
     decagonTickets:decCount,
     decagonOnlyCount:decOnlyCount,
@@ -246,7 +254,7 @@ function computeMetrics(ticketMap){
     fcrCount,fcrRate:pct(fcrCount,decCount),
     compliantCount,complianceRate:pct(compliantCount,decOnlyCount),
     complianceFailures:decOnlyCount-compliantCount,
-    missingReason,missingSubReason,statusNotClosed,pendingStatus,
+    missingReason,missingSubReason,missingAction,statusNotClosed,pendingStatus,
     sameTimestampInts,shortIntervalInts,dupTicketCount,
     recontactCount,recontactResolved,recontactReescalated,recontactStillOpen,recontactTickets,
     all,dec,decOnly
@@ -482,7 +490,7 @@ function renderKPIs(m){
 
   const kpis=[
     {label:'Calls Handled by Decagon',mainVal:fmt.num(m.decagonTickets),subVal:null,icon:'fa-robot',color:'cyan',tip:'Unique calls where Decagon (AI-Agent Call) was the first customer-facing interaction',lvl:'Ticket'},
-    {label:'Interactions by Decagon',mainVal:fmt.num(m.totalAIInts),subVal:null,icon:'fa-comments',color:'purple',tip:'Total AI-Agent Call interaction records across all Decagon calls',lvl:'Interaction'},
+    {label:'Interactions by Decagon',mainVal:fmt.num(m.totalAIInts),subVal:`${m.avgAIPerTicket.toFixed(2)} avg/ticket · 1 in ${m.oneInX||'—'} has repeat`,icon:'fa-comments',color:'purple',tip:`Total AI-Agent Call interaction records. ${fmt.num(m.multiAIDec)} tickets had >1 AI interaction (repeat rate: ${m.repeatRate.toFixed(1)}%)`,lvl:'Interaction'},
     {label:'Decagon FCR',mainVal:fmt.pct(m.fcrRate),subVal:fmt.num(m.fcrCount)+' calls',icon:'fa-bullseye',color:'green',tip:'FCR Met: single Decagon interaction with no further CS involvement or repeat contact. Base: all '+fmt.num(m.decagonTickets)+' Decagon tickets',lvl:'Ticket'},
     {label:'Decagon Containment Rate',mainVal:fmt.pct(m.containmentRate),subVal:fmt.num(m.containedCount)+' calls',icon:'fa-shield-halved',color:'green',tip:'Calls where no CS agent was involved after Decagon. 1,785 - 468 = 1,317',lvl:'Ticket'},
     {label:'CS Assisted',mainVal:fmt.pct(m.csAssistedCount/m.decagonTickets*100),subVal:fmt.num(m.csAssistedCount)+' calls',icon:'fa-person-walking-arrow-right',color:'amber',tip:'Calls where a human CS agent had to handle after Decagon',lvl:'Ticket',pctLarge:true},
@@ -1189,7 +1197,44 @@ function buildTrendsTab() {
     tbl+='<span style="color:#0d9488">pp = percentage points</span>';
     tbl+='<span style="margin-left:auto;font-style:italic">Unaffected by global date filter</span>';
     tbl+='</div></div>';
-    h+=tbl;
+    var insFCRArr=cols.map(k=>B[k]&&B[k].decTickets?B[k].fcrMet/B[k].decTickets*100:null).filter(v=>v!=null);
+    var insAvgFCR=insFCRArr.length?insFCRArr.reduce((a,b)=>a+b,0)/insFCRArr.length:0;
+    var insContArr=cols.map(k=>B[k]&&B[k].decTickets?B[k].contained/B[k].decTickets*100:null).filter(v=>v!=null);
+    var insAvgCont=insContArr.length?insContArr.reduce((a,b)=>a+b,0)/insContArr.length:0;
+    var insCompArr=cols.map(k=>B[k]&&B[k].decOnly?B[k].compliant/B[k].decOnly*100:null).filter(v=>v!=null);
+    var insAvgComp=insCompArr.length?insCompArr.reduce((a,b)=>a+b,0)/insCompArr.length:0;
+    var insMid=Math.floor(cols.length/2);
+    var insFCR1=cols.slice(0,insMid).map(k=>B[k]&&B[k].decTickets?B[k].fcrMet/B[k].decTickets*100:null).filter(v=>v!=null);
+    var insFCR2=cols.slice(insMid).map(k=>B[k]&&B[k].decTickets?B[k].fcrMet/B[k].decTickets*100:null).filter(v=>v!=null);
+    var insF1=insFCR1.length?insFCR1.reduce((a,b)=>a+b,0)/insFCR1.length:0;
+    var insF2=insFCR2.length?insFCR2.reduce((a,b)=>a+b,0)/insFCR2.length:0;
+    var insFCRTrend=insF2-insF1;
+    var insFCRByPeriod=cols.map(k=>({k,rate:B[k]&&B[k].decTickets?B[k].fcrMet/B[k].decTickets*100:0})).filter(v=>v.rate>0);
+    insFCRByPeriod.sort((a,b)=>b.rate-a.rate);
+    var insBestFCR=insFCRByPeriod[0];var insWorstFCR=insFCRByPeriod[insFCRByPeriod.length-1];
+    var insEscSpike=cols.filter(k=>B[k]&&B[k].decTickets&&(B[k].decCalls-B[k].fullHandled)/B[k].decTickets>0.5).length;
+    var insCompGap=100-insAvgComp;
+    var insRepRate=cols.reduce((s,k)=>s+(B[k]?B[k].repCalls||0:0),0);
+    var insTotalDec=cols.reduce((s,k)=>s+(B[k]?B[k].decCalls||0:0),0);
+    var insRepPct=insTotalDec?insRepRate/insTotalDec*100:0;
+    function insIcon(type){return{good:'<span style="color:#059669;font-weight:700">✓</span>',warn:'<span style="color:#d97706;font-weight:700">⚠</span>',bad:'<span style="color:#dc2626;font-weight:700">✗</span>',info:'<span style="color:#0d9488;font-weight:700">→</span>'}[type]||'';}
+    var panels=[];
+    if(insFCRTrend>1)panels.push({type:'good',title:'FCR Improving',body:'FCR up <strong>'+Math.abs(insFCRTrend).toFixed(1)+'pp</strong> in the latter half of this period.'});
+    else if(insFCRTrend<-1)panels.push({type:'warn',title:'FCR Declining',body:'FCR dropped <strong>'+Math.abs(insFCRTrend).toFixed(1)+'pp</strong> — review re-contact patterns.'});
+    else panels.push({type:'info',title:'FCR Stable',body:'FCR steady at <strong>~'+insAvgFCR.toFixed(1)+'%</strong> with no significant drift.'});
+    if(insBestFCR)panels.push({type:'good',title:'Best Period',body:'Highest FCR: <strong>'+insBestFCR.rate.toFixed(1)+'%</strong> — '+keyLabel(insBestFCR.k,mode)+'.'});
+    if(insWorstFCR&&insWorstFCR!==insBestFCR)panels.push({type:'warn',title:'Weakest Period',body:'Lowest FCR: <strong>'+insWorstFCR.rate.toFixed(1)+'%</strong> — '+keyLabel(insWorstFCR.k,mode)+'.'});
+    if(insAvgComp>=80)panels.push({type:'good',title:'Compliance On Track',body:'Avg compliance <strong>'+insAvgComp.toFixed(1)+'%</strong> — fields completed consistently.'});
+    else panels.push({type:'bad',title:'Compliance Gap',body:'Avg compliance <strong>'+insAvgComp.toFixed(1)+'%</strong> — <strong>'+insCompGap.toFixed(1)+'%</strong> of tickets missing Action Taken / Reason / Sub Reason.'});
+    if(insAvgCont>=85)panels.push({type:'good',title:'Strong Containment',body:'Containment averaging <strong>'+insAvgCont.toFixed(1)+'%</strong>.'});
+    else panels.push({type:'warn',title:'Containment Below Target',body:'Containment at <strong>'+insAvgCont.toFixed(1)+'%</strong> — review escalation triggers.'});
+    if(insEscSpike>0)panels.push({type:'warn',title:'Escalation Spikes',body:'<strong>'+insEscSpike+'</strong> period(s) had escalation >50% of Decagon volume.'});
+    if(insRepPct>10)panels.push({type:'warn',title:'High Repeat AI Rate',body:insRepPct.toFixed(1)+'% of tickets had multiple AI interactions.'});
+    var ipHtml='<div style="display:flex;flex-direction:column;gap:10px">';
+    panels.forEach(function(p){var bg={good:'#f0fdf4',warn:'#fffbeb',bad:'#fef2f2',info:'#f0fafa'}[p.type]||'#f8fffe';var br={good:'#bbf7d0',warn:'#fde68a',bad:'#fecaca',info:'#cce8e8'}[p.type]||'#cce8e8';ipHtml+='<div style="background:'+bg+';border:1px solid '+br+';border-radius:10px;padding:12px 14px"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'+insIcon(p.type)+'<span style="font-size:12px;font-weight:700;color:#1e293b">'+p.title+'</span></div><div style="font-size:12px;color:#475569;line-height:1.5">'+p.body+'</div></div>';});
+    ipHtml+='</div>';
+    var insPanel='<div style="width:280px;flex-shrink:0"><div style="font-size:11px;font-weight:700;color:#0d9488;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">💡 Key Insights</div>'+ipHtml+'<div style="margin-top:10px;font-size:10px;color:#94a3b8;font-style:italic">Based on visible period data</div></div>';
+    h+='<div style="display:flex;gap:20px;align-items:flex-start"><div style="flex:1;min-width:0">'+tbl+'</div>'+insPanel+'</div>';
 
         el.innerHTML=h;
     window._tMode=m=>{mode=m;offset=0;render();};
