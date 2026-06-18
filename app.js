@@ -964,12 +964,10 @@ function buildTrendsTab() {
   function keyLabel(k, mode) {
     if (mode==='daily') { const [y,m,d]=k.split('-'); return new Date(y,m-1,d).toLocaleDateString('en-GB',{day:'2-digit',month:'short'}); }
     if (mode==='weekly') {
-      const [y,w]=k.split('-W');
-      const jan1=new Date(y,0,1);
-      const d=new Date(jan1.getTime()+(parseInt(w)-1)*7*86400000);
-      d.setDate(d.getDate()-d.getDay()+1);
-      const e=new Date(d); e.setDate(e.getDate()+6);
-      return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'})+' – '+e.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
+      const [y,m,d]=k.split('-').map(Number);
+      const mon=new Date(y,m-1,d);
+      const sun=new Date(y,m-1,d+6);
+      return mon.toLocaleDateString('en-GB',{day:'2-digit',month:'short'})+' – '+sun.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
     }
     if (mode==='monthly') { const [y,m]=k.split('-'); return new Date(y,m-1,1).toLocaleDateString('en-GB',{month:'short',year:'numeric'}); }
     return k;
