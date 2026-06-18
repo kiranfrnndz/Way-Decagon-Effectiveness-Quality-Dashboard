@@ -1139,42 +1139,54 @@ function buildTrendsTab() {
         <div style="margin-top:8px">${kpiDelta(decP,prevDecP)}</div>
       </div>
     </div>
-    <div style="overflow-x:auto;border-radius:10px;border:0.5px solid var(--color-border-tertiary);box-shadow:0 1px 3px rgba(0,0,0,0.06)">
-    <table style="width:100%;border-collapse:collapse;font-size:14px;table-layout:fixed">
-      <thead><tr style="background:var(--color-background-secondary)">
-        <th style="padding:12px 16px;text-align:left;font-weight:500;font-size:12px;color:var(--color-text-secondary);border:0.5px solid var(--color-border-tertiary);width:220px;text-transform:uppercase;letter-spacing:0.04em">Metric</th>
-        ${cols.map(k=>`<th style="padding:12px 16px;text-align:center;font-weight:500;font-size:13px;color:var(--color-text-primary);border:0.5px solid var(--color-border-tertiary)">${keyLabel(k,mode)}</th>`).join('')}
-      </tr></thead><tbody>`;
+`;
 
-    for (const row of ROWS) {
-      if (row.section){h+=`<tr><td colspan="${cols.length+1}" style="padding:6px 12px;font-size:10px;font-weight:500;color:var(--color-text-secondary);background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);text-transform:uppercase;letter-spacing:0.05em">${row.section}</td></tr>`;continue;}
-      h+=`<tr><td style="padding:8px 12px;font-size:12px;color:var(--color-text-secondary);background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-left:3px solid ${row.color};font-weight:500">${row.label}</td>`;
-      cols.forEach((k,i)=>{
-        const b=B[k]; const prev=i>0?B[cols[i-1]]:null;
-        const val=b[row.key]||0; const prevVal=prev?(prev[row.key]||0):null;
-        let display,sub='';
+    const ICONS2={totalCalls:'fa-phone',csCalls:'fa-headset',decCalls:'fa-robot',repCalls:'fa-rotate',fullHandled:'fa-circle-check',escalated:'fa-person-walking-arrow-right',fcrMet:'fa-bullseye',contained:'fa-shield-halved',compliant:'fa-clipboard-check'};
+    var tbl='<div style="overflow-x:auto;border-radius:12px;border:1px solid #cce8e8;box-shadow:0 2px 8px rgba(13,148,136,0.08);background:#fff">';
+    tbl+='<table style="width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed">';
+    tbl+='<thead><tr style="background:#f0fafa;border-bottom:2px solid #cce8e8">';
+    tbl+='<th style="padding:14px 16px;text-align:left;font-weight:700;font-size:11px;color:#475569;border-right:1px solid #cce8e8;width:230px;text-transform:uppercase;letter-spacing:0.05em">Metric</th>';
+    cols.forEach(function(k,i){var lbl=keyLabel(k,mode);var sub=i===0?'<div style="font-size:10px;font-weight:600;color:#0d9488;margin-top:2px">Baseline</div>':'<div style="font-size:10px;font-weight:500;color:#94a3b8;margin-top:2px">vs prev</div>';tbl+='<th style="padding:10px 16px;text-align:center;font-weight:600;font-size:12px;color:#0f172a;border-right:1px solid #cce8e8"><div style="color:#0d9488;font-weight:700">'+lbl+'</div>'+sub+'</th>';});
+    tbl+='</tr></thead><tbody>';
+    for(var ri=0;ri<ROWS.length;ri++){
+      var row=ROWS[ri];
+      if(row.section){tbl+='<tr><td colspan="'+(cols.length+1)+'" style="padding:8px 16px;font-size:10px;font-weight:700;color:#0d9488;background:#f0fafa;border-bottom:1px solid #cce8e8;text-transform:uppercase;letter-spacing:0.08em;border-left:4px solid #0d9488">'+row.section+'</td></tr>';continue;}
+      var icon=ICONS2[row.key]||'fa-chart-bar';
+      var pof=row.pctOf==='totalCalls'?'total calls':row.pctOf==='decTickets'?'Decagon tickets':row.pctOf==='decOnly'?'Decagon only':'';
+      tbl+='<tr style="border-bottom:1px solid #e6f5f5"><td style="padding:12px 16px;background:#fafffe;border-right:1px solid #cce8e8;border-left:3px solid '+row.color+'">';
+      tbl+='<div style="display:flex;align-items:center;gap:8px"><span style="width:26px;height:26px;border-radius:6px;background:'+row.color+'22;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fa-solid '+icon+'" style="font-size:11px;color:'+row.color+'"></i></span>';
+      tbl+='<div><div style="font-size:12px;font-weight:600;color:#1e293b">'+row.label+'</div>';
+      if(pof)tbl+='<div style="font-size:10px;color:#94a3b8">% of '+pof+'</div>';
+      tbl+='</div></div></td>';
+      cols.forEach(function(k,i){
+        var b=B[k];var prev=i>0?B[cols[i-1]]:null;var val=b[row.key]||0;var isB=i===0;
+        var disp='';var cL='';var sL='';
         if(row.isPct){
-          const base=b[row.pctOf]||0; display=base?pct(val,base):'—';
-          if(prev){const pb=prev[row.pctOf]||0,pp=pb?(prev[row.key]||0)/pb*100:null,cp=base?val/base*100:null;if(pp!=null&&cp!=null){const d=cp-pp;if(d)sub='<br><span style="font-size:10px;color:'+(d>0?'#3B6D11':'#A32D2D')+'">'+(d>0?'▲':'▼')+Math.abs(d).toFixed(1)+'%</span>';}}
+          var base=b[row.pctOf]||0;var cp=base?val/base*100:null;
+          disp=cp!=null?cp.toFixed(1)+'%':'--';
+          if(prev&&!isB){var pb=prev[row.pctOf]||0;var pp=pb?(prev[row.key]||0)/pb*100:null;if(pp!=null&&cp!=null){var d=cp-pp;if(Math.abs(d)>=0.01){var c2=d>0?'#059669':'#dc2626';cL='<div style="font-size:11px;font-weight:600;color:'+c2+';margin-top:3px">'+(d>0?'&#9650;':'&#9660;')+' '+Math.abs(d).toFixed(1)+'pp</div>';}}}
         } else {
-          display=fmt(val);
-          if(prev) sub='<br>'+delta(val,prevVal);
-          if(row.pctOf){const base=b[row.pctOf]||0;if(base)sub+='<br><span style="font-size:10px;color:var(--color-text-secondary)">'+pct(val,base)+'</span>';}
-          if(row.extra&&b[row.extra]) sub+='<br><span style="font-size:10px;color:var(--color-text-secondary)">'+fmt(b[row.extra])+' customers</span>';
+          disp=fmt(val);
+          if(prev&&!isB){var pv=prev[row.key]||0;var d=val-pv;var pc=pv?d/pv*100:null;if(d!==0&&pc!=null){var c2=d>0?'#059669':'#dc2626';cL='<div style="font-size:11px;font-weight:600;color:'+c2+';margin-top:3px">'+(d>0?'&#9650;':'&#9660;')+' '+Math.abs(pc).toFixed(1)+'%</div>';}}
+          if(row.pctOf){var b2=b[row.pctOf]||0;if(b2)sL='<div style="font-size:11px;color:#64748b;margin-top:1px">'+pct(val,b2)+'</div>';}
+          if(row.extra&&b[row.extra])sL+='<div style="font-size:11px;color:#64748b">'+fmt(b[row.extra])+' customers</div>';
         }
-        h+=`<td style="padding:8px 10px;text-align:center;border:0.5px solid var(--color-border-tertiary);vertical-align:top">${display}${sub}</td>`;
+        tbl+='<td style="padding:12px 16px;text-align:center;border-right:1px solid #e6f5f5;background:'+(isB?'#f0fafa':'#fff')+'">';
+        tbl+='<div style="font-size:16px;font-weight:700;color:'+(isB?'#0d9488':'#0f172a')+';font-family:monospace">'+disp+'</div>';
+        tbl+=sL+cL+'</td>';
       });
-      h+=`</tr>`;
+      tbl+='</tr>';
     }
+    tbl+='</tbody></table></div>';
+    tbl+='<div style="margin-top:12px;display:flex;gap:20px;font-size:11px;color:#64748b;align-items:center">';
+    tbl+='<span><span style="color:#059669;font-weight:600">&#9650;</span> Increase vs prior period</span>';
+    tbl+='<span><span style="color:#dc2626;font-weight:600">&#9660;</span> Decrease vs prior period</span>';
+    tbl+='<span style="color:#0d9488">pp = percentage points</span>';
+    tbl+='<span style="margin-left:auto;font-style:italic">Unaffected by global date filter</span>';
+    tbl+='</div></div>';
+    h+=tbl;
 
-    h+=`</tbody></table></div>
-    <div style="margin-top:10px;display:flex;gap:16px;font-size:11px;color:var(--color-text-secondary)">
-      <span><span style="color:#3B6D11;font-weight:500">▲</span> Up vs prev</span>
-      <span><span style="color:#A32D2D;font-weight:500">▼</span> Down vs prev</span>
-      <span>Trend Analysis uses full dataset — unaffected by global date filter</span>
-    </div></div>`;
-
-    el.innerHTML=h;
+        el.innerHTML=h;
     window._tMode=m=>{mode=m;offset=0;render();};
     window._tNav=dir=>{const ks=Object.keys(getBuckets()).sort();const ps2=mode==='daily'?7:mode==='weekly'?4:ks.length;const mo=Math.max(0,Math.floor((ks.length-ps2)/ps2));offset=Math.max(0,Math.min(mo,offset+dir));render();};
   }
