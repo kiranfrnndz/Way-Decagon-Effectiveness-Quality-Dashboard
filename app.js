@@ -945,7 +945,9 @@ function buildTrendsTab() {
 
   function getTicketDate(tk) {
     const ai = tk.interactions.filter(i => i.type==='AI-Agent Call' && i.dateStr);
-    return ai.length ? ai[0].dateStr : null;
+    if (!ai.length) return null;
+    // Use earliest AI interaction date
+    return ai.reduce((a,b) => a.dateStr < b.dateStr ? a : b).dateStr;
   }
 
   function dayKey(ds) { return ds || null; }
