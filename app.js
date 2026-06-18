@@ -1049,7 +1049,7 @@ function buildTrendsTab() {
     const ps=mode==='daily'?7:mode==='weekly'?4:mode==='monthly'?12:keys.length;
     const maxOff=Math.max(0,Math.floor((keys.length-ps)/ps));
     // Pin baseline: skip buckets before Jun 1
-    const junStart='2025-06-01';
+    const junStart='2026-06-01';
     const firstJunIdx=keys.findIndex(k=>k>=junStart);
     const baseIdx=firstJunIdx>=0?firstJunIdx:0;
     if(offset===0)offset=0; // keep user nav relative to Jun start
