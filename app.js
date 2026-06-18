@@ -945,19 +945,20 @@ function buildTrendsTab() {
 
   function getTicketDate(tk) {
     const ai = tk.interactions.filter(i => i.type==='AI-Agent Call' && i.dateStr);
-    return ai.length ? parseDStr(ai[0].dateStr) : null;
+    return ai.length ? ai[0].dateStr : null;
   }
 
-  function dayKey(d) { return d ? d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0') : null; }
-  function weekKey(d) {
-    if (!d) return null;
-    const t = new Date(d); t.setHours(0,0,0,0);
+  function dayKey(ds) { return ds || null; }
+  function weekKey(ds) {
+    if (!ds) return null;
+    const [y,m,d] = ds.split('-').map(Number);
+    const t = new Date(y, m-1, d);
     const day = t.getDay(); t.setDate(t.getDate()-day+(day===0?-6:1));
     const wn = Math.ceil((((t-new Date(t.getFullYear(),0,1))/86400000)+1)/7);
     return t.getFullYear()+'-W'+String(wn).padStart(2,'0');
   }
-  function monthKey(d) { return d ? d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0') : null; }
-  function yearKey(d) { return d ? ''+d.getFullYear() : null; }
+  function monthKey(ds) { return ds ? ds.slice(0,7) : null; }
+  function yearKey(ds) { return ds ? ds.slice(0,4) : null; }
 
   function keyLabel(k, mode) {
     if (mode==='daily') { const [y,m,d]=k.split('-'); return new Date(y,m-1,d).toLocaleDateString('en-GB',{day:'2-digit',month:'short'}); }
@@ -979,7 +980,7 @@ function buildTrendsTab() {
     for (const tk of allTickets) {
       for (const i of tk.interactions) {
         if (i.type!=='Call'&&i.type!=='AI-Agent Call') continue;
-        const k=keyFn(parseDStr(i.dateStr));
+        const k=keyFn(i.dateStr);
         if (!k) continue;
         ensure(k);
         B[k].totalCalls++;
