@@ -1052,9 +1052,10 @@ function buildTrendsTab() {
     const cols=keys.slice(si,si+ps);
     if(!cols.length){el.innerHTML='<p style="padding:2rem;color:var(--color-text-secondary)">No data available</p>';return;}
 
-    const totP=cols.reduce((s,k)=>s+(B[k].totalCalls||0),0);
-    const csP=cols.reduce((s,k)=>s+(B[k].csCalls||0),0);
-    const decP=cols.reduce((s,k)=>s+(B[k].decCalls||0),0);
+    const allKeys=Object.keys(B);
+    const totP=allKeys.reduce((s,k)=>s+(B[k].totalCalls||0),0);
+    const csP=allKeys.reduce((s,k)=>s+(B[k].csCalls||0),0);
+    const decP=allKeys.reduce((s,k)=>s+(B[k].decCalls||0),0);
     const pLabel=keyLabel(cols[0],mode)+' → '+keyLabel(cols[cols.length-1],mode);
 
     const mBtn=m=>`<button onclick="window._tMode('${m}')" style="padding:6px 14px;font-size:12px;font-weight:500;border:${mode===m?'0.5px solid var(--color-border-secondary)':'none'};background:${mode===m?'var(--color-background-primary)':'transparent'};color:${mode===m?'var(--color-text-primary)':'var(--color-text-secondary)'};border-radius:6px;cursor:pointer">${m.charAt(0).toUpperCase()+m.slice(1)}</button>`;
