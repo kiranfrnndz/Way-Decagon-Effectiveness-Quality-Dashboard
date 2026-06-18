@@ -507,8 +507,10 @@ function renderKPIs(m){
       ?`<div class="kpi-pct-large" style="color:${c.a}">${k.mainVal}</div>${k.subVal?`<div class="kpi-num-small">${k.subVal}</div>`:''}`
       :`<div class="kpi-val-large">${k.mainVal}</div>${k.subVal?`<div class="kpi-val-small">${k.subVal}</div>`:''}`;
     return`<div class="kpi-card" style="--ac:${c.a};--acd:${c.d}">
-      <div class="kpi-tip" title="${k.tip}"><i class="fa-solid fa-circle-info"></i></div>
-      <div class="kpi-icon"><i class="fa-solid ${k.icon}"></i></div>
+      <div class="kpi-card-top">
+        <div class="kpi-icon"><i class="fa-solid ${k.icon}"></i></div>
+        <div class="kpi-tip" title="${k.tip}" style="color:#cbd5e1;cursor:help"><i class="fa-solid fa-circle-info"></i></div>
+      </div>
       <div class="kpi-label">${k.label}</div>
       ${mainHtml}
       <div class="kpi-lvl ${k.lvl==='Interaction'?'int':''}">${k.lvl} Level</div>
