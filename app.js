@@ -1048,7 +1048,12 @@ function buildTrendsTab() {
     const keys=Object.keys(B).sort();
     const ps=mode==='daily'?7:mode==='weekly'?4:mode==='monthly'?12:keys.length;
     const maxOff=Math.max(0,Math.floor((keys.length-ps)/ps));
-    const si=Math.max(0,Math.min(keys.length-ps,keys.length-ps-offset*ps));
+    // Pin baseline: skip buckets before Jun 1
+    const junStart='2025-06-01';
+    const firstJunIdx=keys.findIndex(k=>k>=junStart);
+    const baseIdx=firstJunIdx>=0?firstJunIdx:0;
+    if(offset===0)offset=0; // keep user nav relative to Jun start
+    const si=Math.max(baseIdx,Math.min(keys.length-ps,baseIdx+offset*ps));
     const cols=keys.slice(si,si+ps);
     if(!cols.length){el.innerHTML='<p style="padding:2rem;color:var(--color-text-secondary)">No data available</p>';return;}
 
