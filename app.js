@@ -355,7 +355,7 @@ function processRows(rows,filename){
           STATE.ticketMap.forEach(tk=>{tk.fcrAchieved=tk.isDecagonTicket&&!tk.csAssisted&&tk.aiInteractionCount===1&&!tk.shortIntervalFlag;});
           // fcrAchieved already set correctly above
           const m=computeMetrics(STATE.ticketMap);
-          const allDates=[...map.values()].filter(t=>t.aiInteractionDate).map(t=>t.aiInteractionDate);
+          const allDates=[...map.values()].filter(t=>t.dateBucket).map(t=>t.dateBucket);
           if(allDates.length){const minD=allDates.reduce((a,b)=>a<b?a:b);const maxD=allDates.reduce((a,b)=>a>b?a:b);document.getElementById('globalDateFrom').value=minD;document.getElementById('globalDateTo').value=maxD;document.getElementById('dateRangeBar').style.display='flex';}
           document.getElementById('dataBadge').style.display='flex';
           document.getElementById('dataBadgeText').textContent=fmt.num(m.decagonTickets)+' Decagon Calls';
@@ -921,7 +921,7 @@ function applyDateFilter(){
 
 function clearDateFilter(){
   STATE.filteredTickets=new Map(STATE.ticketMap);
-  const dates=[...STATE.ticketMap.values()].filter(t=>t.aiInteractionDate).map(t=>t.aiInteractionDate);
+  const dates=[...STATE.ticketMap.values()].filter(t=>t.dateBucket).map(t=>t.dateBucket);
   if(dates.length){dates.sort();document.getElementById('globalDateFrom').value=dates[0];document.getElementById('globalDateTo').value=dates[dates.length-1];}
   renderDashboard();showToast('Filter cleared','info');
 }
