@@ -1266,7 +1266,7 @@ function setupNav(){
       document.getElementById('tab-'+tab)?.classList.add('active');
       document.getElementById('topbarTitle').textContent=TITLES[tab]||tab;
       if(tab==='fcr'){if(!STATE.fcrBuilt){buildFCRTab();STATE.fcrBuilt=true;}}
-      if(tab==='trends'){if(!STATE.trendsBuilt){buildTrendsTab();STATE.trendsBuilt=true;}}
+      if(tab==='trends'){buildTrendsTab();}
     });
   });
   document.getElementById('sidebarToggle').addEventListener('click',()=>{
