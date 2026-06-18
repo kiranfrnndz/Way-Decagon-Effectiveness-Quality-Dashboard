@@ -953,9 +953,10 @@ function buildTrendsTab() {
     if (!ds) return null;
     const [y,m,d] = ds.split('-').map(Number);
     const t = new Date(y, m-1, d);
-    const day = t.getDay(); t.setDate(t.getDate()-day+(day===0?-6:1));
-    const wn = Math.ceil((((t-new Date(t.getFullYear(),0,1))/86400000)+1)/7);
-    return t.getFullYear()+'-W'+String(wn).padStart(2,'0');
+    const day = t.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    t.setDate(t.getDate() + diff);
+    return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
   }
   function monthKey(ds) { return ds ? ds.slice(0,7) : null; }
   function yearKey(ds) { return ds ? ds.slice(0,4) : null; }
