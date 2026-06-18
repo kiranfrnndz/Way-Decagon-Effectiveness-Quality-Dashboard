@@ -490,7 +490,7 @@ function renderKPIs(m){
 
   const kpis=[
     {label:'Calls Handled by Decagon',mainVal:fmt.num(m.decagonTickets),subVal:null,icon:'fa-robot',color:'cyan',tip:'Unique calls where Decagon (AI-Agent Call) was the first customer-facing interaction',lvl:'Ticket'},
-    {label:'Interactions by Decagon',mainVal:fmt.num(m.totalAIInts),subVal:`${m.avgAIPerTicket.toFixed(2)} avg/ticket · 1 in ${m.oneInX||'—'} has repeat`,icon:'fa-comments',color:'purple',tip:`Total AI-Agent Call interaction records. ${fmt.num(m.multiAIDec)} tickets had >1 AI interaction (repeat rate: ${m.repeatRate.toFixed(1)}%)`,lvl:'Interaction'},
+    {label:'Interactions by Decagon',mainVal:fmt.num(m.totalAIInts),subVal:`Avg ${m.avgAIPerTicket.toFixed(2)} AI interactions per ticket`,icon:'fa-comments',color:'purple',tip:`Total AI-Agent Call interaction records. ${fmt.num(m.multiAIDec)} tickets had >1 AI interaction (repeat rate: ${m.repeatRate.toFixed(1)}%)`,lvl:'Interaction'},
     {label:'Decagon FCR',mainVal:fmt.pct(m.fcrRate),subVal:fmt.num(m.fcrCount)+' calls',icon:'fa-bullseye',color:'green',tip:'FCR Met: single Decagon interaction with no further CS involvement or repeat contact. Base: all '+fmt.num(m.decagonTickets)+' Decagon tickets',lvl:'Ticket'},
     {label:'Decagon Containment Rate',mainVal:fmt.pct(m.containmentRate),subVal:fmt.num(m.containedCount)+' calls',icon:'fa-shield-halved',color:'green',tip:'Calls where no CS agent was involved after Decagon. 1,785 - 468 = 1,317',lvl:'Ticket'},
     {label:'CS Assisted',mainVal:fmt.pct(m.csAssistedCount/m.decagonTickets*100),subVal:fmt.num(m.csAssistedCount)+' calls',icon:'fa-person-walking-arrow-right',color:'amber',tip:'Calls where a human CS agent had to handle after Decagon',lvl:'Ticket',pctLarge:true},
