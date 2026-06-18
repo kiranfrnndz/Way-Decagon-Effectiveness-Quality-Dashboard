@@ -997,6 +997,7 @@ function buildTrendsTab() {
       if (tk.decagonOnly){B[k].fullHandled++;B[k].decOnly++;}
       if (tk.csAssisted) B[k].escalated++;
       if (tk.fcrAchieved) B[k].fcrMet++;
+      B[k].totalDecTickets = (B[k].totalDecTickets||0) + 1;
       if (tk.decagonContained) B[k].contained++;
       if (tk.compliant) B[k].compliant++;
       if (tk.aiInteractionCount>1){
@@ -1035,7 +1036,7 @@ function buildTrendsTab() {
     {section:'Decagon performance'},
     {key:'fullHandled',label:'Fully handled by Decagon',color:'#639922',pctOf:'decTickets'},
     {key:'escalated',label:'Escalated to CS by Decagon',color:'#993C1D',pctOf:'decTickets'},
-    {key:'fcrMet',label:'Decagon FCR',color:'#1D9E75',pctOf:'decOnly',isPct:true},
+    {key:'fcrMet',label:'Decagon FCR',color:'#1D9E75',pctOf:'decTickets',isPct:true},
     {key:'contained',label:'Decagon containment rate',color:'#0F6E56',pctOf:'decTickets',isPct:true},
     {key:'compliant',label:'Decagon compliance rate',color:'#7F77DD',pctOf:'decOnly',isPct:true},
   ];
