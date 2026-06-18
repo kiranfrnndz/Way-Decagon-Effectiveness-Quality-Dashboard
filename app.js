@@ -1022,9 +1022,9 @@ function buildTrendsTab() {
   const fmt = n => (n==null||isNaN(n))?'—':Math.round(n).toLocaleString();
   const pct = (a,b) => b?(a/b*100).toFixed(1)+'%':'—';
   function delta(c,p) {
-    if (p==null||c==null) return '<span style="font-size:10px;color:var(--color-text-secondary)">—</span>';
-    const d=c-p; if (!d) return '<span style="font-size:10px;color:var(--color-text-secondary)">—</span>';
-    return d>0?`<span style="font-size:10px;color:#3B6D11">▲ ${fmt(d)}</span>`:`<span style="font-size:10px;color:#A32D2D">▼ ${fmt(Math.abs(d))}</span>`;
+    if (p==null||c==null) return '<span style="font-size:11px;color:var(--color-text-secondary)">—</span>';
+    const d=c-p; if (!d) return '<span style="font-size:11px;color:var(--color-text-secondary)">—</span>';
+    return d>0?`<span style="font-size:11px;font-weight:500;color:#3B6D11">▲ ${fmt(d)}</span>`:`<span style="font-size:11px;font-weight:500;color:#A32D2D">▼ ${fmt(Math.abs(d))}</span>`;
   }
 
   const ROWS=[
@@ -1057,25 +1057,25 @@ function buildTrendsTab() {
 
     const mBtn=m=>`<button onclick="window._tMode('${m}')" style="padding:6px 14px;font-size:12px;font-weight:500;border:${mode===m?'0.5px solid var(--color-border-secondary)':'none'};background:${mode===m?'var(--color-background-primary)':'transparent'};color:${mode===m?'var(--color-text-primary)':'var(--color-text-secondary)'};border-radius:6px;cursor:pointer">${m.charAt(0).toUpperCase()+m.slice(1)}</button>`;
 
-    let h=`<div style="padding:1rem">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px">
+    let h=`<div style="padding:1.5rem">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:20px">
       <div style="display:flex;gap:4px;background:var(--color-background-secondary);padding:4px;border-radius:8px;border:0.5px solid var(--color-border-tertiary)">${['daily','weekly','monthly','yearly'].map(mBtn).join('')}</div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <button onclick="window._tNav(-1)" style="width:28px;height:28px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);border-radius:8px;cursor:pointer;font-size:14px;color:var(--color-text-primary)">←</button>
-        <span style="font-size:12px;font-weight:500;color:var(--color-text-primary);min-width:200px;text-align:center">${pLabel}</span>
-        <button onclick="window._tNav(1)" style="width:28px;height:28px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);border-radius:8px;cursor:pointer;font-size:14px;color:var(--color-text-primary)">→</button>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button onclick="window._tNav(-1)" style="width:32px;height:32px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);border-radius:8px;cursor:pointer;font-size:16px;color:var(--color-text-primary)">←</button>
+        <span style="font-size:14px;font-weight:500;color:var(--color-text-primary);min-width:220px;text-align:center">${pLabel}</span>
+        <button onclick="window._tNav(1)" style="width:32px;height:32px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);border-radius:8px;cursor:pointer;font-size:16px;color:var(--color-text-primary)">→</button>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
-      <div style="background:var(--color-background-secondary);border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.04em">Total calls handled</div><div style="font-size:22px;font-weight:500;color:var(--color-text-primary);margin-top:2px">${fmt(totP)}</div><div style="font-size:11px;color:var(--color-text-secondary)">Period total</div></div>
-      <div style="background:var(--color-background-secondary);border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.04em">Calls handled by CS</div><div style="font-size:22px;font-weight:500;color:#3B6D11;margin-top:2px">${fmt(csP)}</div><div style="font-size:11px;color:var(--color-text-secondary)">${pct(csP,totP)} of total</div></div>
-      <div style="background:var(--color-background-secondary);border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.04em">Calls handled by Decagon</div><div style="font-size:22px;font-weight:500;color:#534AB7;margin-top:2px">${fmt(decP)}</div><div style="font-size:11px;color:var(--color-text-secondary)">${pct(decP,totP)} of total</div></div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+      <div style="background:var(--color-background-secondary);border-radius:10px;padding:16px 18px;border-top:3px solid #185FA5"><div style="font-size:11px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Total calls handled</div><div style="font-size:28px;font-weight:500;color:var(--color-text-primary)">${fmt(totP)}</div><div style="font-size:12px;color:var(--color-text-secondary);margin-top:2px">Period total</div></div>
+      <div style="background:var(--color-background-secondary);border-radius:10px;padding:16px 18px;border-top:3px solid #3B6D11"><div style="font-size:11px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Calls handled by CS</div><div style="font-size:28px;font-weight:500;color:#3B6D11">${fmt(csP)}</div><div style="font-size:12px;color:var(--color-text-secondary);margin-top:2px">${pct(csP,totP)} of total</div></div>
+      <div style="background:var(--color-background-secondary);border-radius:10px;padding:16px 18px;border-top:3px solid #534AB7"><div style="font-size:11px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Calls handled by Decagon</div><div style="font-size:28px;font-weight:500;color:#534AB7">${fmt(decP)}</div><div style="font-size:12px;color:var(--color-text-secondary);margin-top:2px">${pct(decP,totP)} of total</div></div>
     </div>
-    <div style="overflow-x:auto;border-radius:8px;border:0.5px solid var(--color-border-tertiary)">
-    <table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">
+    <div style="overflow-x:auto;border-radius:10px;border:0.5px solid var(--color-border-tertiary);box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+    <table style="width:100%;border-collapse:collapse;font-size:14px;table-layout:fixed">
       <thead><tr style="background:var(--color-background-secondary)">
-        <th style="padding:8px 12px;text-align:left;font-weight:500;font-size:11px;color:var(--color-text-secondary);border:0.5px solid var(--color-border-tertiary);width:200px">Metric</th>
-        ${cols.map(k=>`<th style="padding:8px 10px;text-align:center;font-weight:500;font-size:11px;color:var(--color-text-secondary);border:0.5px solid var(--color-border-tertiary)">${keyLabel(k,mode)}</th>`).join('')}
+        <th style="padding:12px 16px;text-align:left;font-weight:500;font-size:12px;color:var(--color-text-secondary);border:0.5px solid var(--color-border-tertiary);width:220px;text-transform:uppercase;letter-spacing:0.04em">Metric</th>
+        ${cols.map(k=>`<th style="padding:12px 16px;text-align:center;font-weight:500;font-size:13px;color:var(--color-text-primary);border:0.5px solid var(--color-border-tertiary)">${keyLabel(k,mode)}</th>`).join('')}
       </tr></thead><tbody>`;
 
     for (const row of ROWS) {
