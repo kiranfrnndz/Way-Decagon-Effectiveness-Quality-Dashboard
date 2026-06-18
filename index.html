@@ -23,6 +23,7 @@
   <nav class="sidebar-nav">
     <a class="nav-item active" data-tab="upload"><i class="fa-solid fa-upload"></i><span>Data Source</span></a>
     <a class="nav-item" data-tab="kpis"><i class="fa-solid fa-gauge-high"></i><span>Executive KPIs</span></a>
+    <a class="nav-item" data-tab="trends"><i class="fa-solid fa-chart-line"></i><span>Trend Analysis</span></a>
     <a class="nav-item" data-tab="effectiveness"><i class="fa-solid fa-chart-line"></i><span>Effectiveness</span></a>
     <a class="nav-item" data-tab="fcr"><i class="fa-solid fa-bullseye"></i><span>FCR Analysis</span></a>
     <a class="nav-item" data-tab="compliance"><i class="fa-solid fa-circle-check"></i><span>Compliance</span></a>
@@ -103,6 +104,9 @@
     </div>
 
     <!-- EFFECTIVENESS -->
+    <div class="tab-panel" id="tab-trends">
+      <div id="trendsContent" style="padding:0"></div>
+    </div>
     <div class="tab-panel" id="tab-effectiveness">
       <div class="panel-header"><h2>Decagon Effectiveness</h2><p>Daily trend analysis from first date with data</p></div>
       <div class="charts-grid-2">
@@ -292,6 +296,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="app.js?v=34"></script>
+<script src="app.js?v=35"></script>
 </body>
 </html>

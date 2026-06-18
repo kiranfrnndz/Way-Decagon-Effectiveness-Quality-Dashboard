@@ -352,7 +352,7 @@ function processRows(rows,filename){
         setTimeout(()=>{
           STATE.ticketMap=map;STATE.filteredTickets=new Map(map);
           computeShortIntervalDefects(STATE.ticketMap);
-          STATE.ticketMap.forEach(tk=>{tk.fcrAchieved=tk.isDecagonTicket&&!tk.csAssisted&&tk.aiInteractionCount===1&&!tk.shortIntervalFlag;});const _d={t:0,nd:0,cs:0,ma:0,si:0,p:0};STATE.ticketMap.forEach(tk=>{_d.t++;if(!tk.isDecagonTicket){_d.nd++;return;}if(tk.fcrAchieved)_d.p++;else if(tk.csAssisted)_d.cs++;else if(tk.aiInteractionCount>1)_d.ma++;else if(tk.shortIntervalFlag)_d.si++;});console.log("[FCR DEBUG]",_d);STATE._fcrDebug=_d;
+          STATE.ticketMap.forEach(tk=>{tk.fcrAchieved=tk.isDecagonTicket&&!tk.csAssisted&&tk.aiInteractionCount===1&&!tk.shortIntervalFlag;});
           // fcrAchieved already set correctly above
           const m=computeMetrics(STATE.ticketMap);
           const allDates=[...map.values()].filter(t=>t.aiInteractionDate).map(t=>t.aiInteractionDate);
@@ -927,6 +927,191 @@ function clearDateFilter(){
 }
 
 // ── EXPORT ──
+function buildTrendsTab() {
+  const el = document.getElementById('trendsContent');
+  if (!el) return;
+  const allTickets = [...STATE.ticketMap.values()];
+
+  function parseDStr(s) {
+    if (!s) return null;
+    const m = s.match(/(\d+)\/(\d+)\/(\d+)\s+(\d+):(\d+):(\d+)\s+(AM|PM)/i);
+    if (!m) return null;
+    let [,mo,dy,yr,hr,mn,sc,ap] = m;
+    hr = parseInt(hr);
+    if (ap.toUpperCase()==='PM'&&hr!==12) hr+=12;
+    if (ap.toUpperCase()==='AM'&&hr===12) hr=0;
+    return new Date(yr, mo-1, dy, hr, mn, sc);
+  }
+
+  function getTicketDate(tk) {
+    const ai = tk.interactions.filter(i => i.type==='AI-Agent Call' && i.dateStr);
+    return ai.length ? parseDStr(ai[0].dateStr) : null;
+  }
+
+  function dayKey(d) { return d ? d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0') : null; }
+  function weekKey(d) {
+    if (!d) return null;
+    const t = new Date(d); t.setHours(0,0,0,0);
+    const day = t.getDay(); t.setDate(t.getDate()-day+(day===0?-6:1));
+    const wn = Math.ceil((((t-new Date(t.getFullYear(),0,1))/86400000)+1)/7);
+    return t.getFullYear()+'-W'+String(wn).padStart(2,'0');
+  }
+  function monthKey(d) { return d ? d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0') : null; }
+  function yearKey(d) { return d ? ''+d.getFullYear() : null; }
+
+  function keyLabel(k, mode) {
+    if (mode==='daily') { const [y,m,d]=k.split('-'); return new Date(y,m-1,d).toLocaleDateString('en-GB',{day:'2-digit',month:'short'}); }
+    if (mode==='weekly') {
+      const [y,w]=k.split('-W');
+      const jan1=new Date(y,0,1);
+      const d=new Date(jan1.getTime()+(parseInt(w)-1)*7*86400000);
+      d.setDate(d.getDate()-d.getDay()+1);
+      const e=new Date(d); e.setDate(e.getDate()+6);
+      return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'})+' – '+e.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
+    }
+    if (mode==='monthly') { const [y,m]=k.split('-'); return new Date(y,m-1,1).toLocaleDateString('en-GB',{month:'short',year:'numeric'}); }
+    return k;
+  }
+
+  function buildBuckets(keyFn) {
+    const B = {};
+    const ensure = k => { if (!B[k]) B[k]={totalCalls:0,csCalls:0,decCalls:0,decTickets:0,fullHandled:0,escalated:0,fcrMet:0,contained:0,compliant:0,decOnly:0,repCalls:0,repCustomers:0}; };
+    for (const tk of allTickets) {
+      for (const i of tk.interactions) {
+        if (i.type!=='Call'&&i.type!=='AI-Agent Call') continue;
+        const k=keyFn(parseDStr(i.dateStr));
+        if (!k) continue;
+        ensure(k);
+        B[k].totalCalls++;
+        if (i.type==='Call') B[k].csCalls++;
+        else B[k].decCalls++;
+      }
+    }
+    const repCust = {};
+    for (const tk of allTickets) {
+      if (!tk.isDecagonTicket) continue;
+      const k=keyFn(getTicketDate(tk));
+      if (!k) continue;
+      ensure(k);
+      B[k].decTickets++;
+      if (tk.decagonOnly){B[k].fullHandled++;B[k].decOnly++;}
+      if (tk.csAssisted) B[k].escalated++;
+      if (tk.fcrAchieved) B[k].fcrMet++;
+      if (tk.decagonContained) B[k].contained++;
+      if (tk.compliant) B[k].compliant++;
+      if (tk.aiInteractionCount>1){
+        B[k].repCalls+=tk.aiInteractionCount-1;
+        if (!repCust[k]) repCust[k]=new Set();
+        if (tk.ogi) repCust[k].add(tk.ogi); else repCust[k].add(tk.ticketId);
+      }
+    }
+    for (const [k,s] of Object.entries(repCust)) { if (B[k]) B[k].repCustomers=s.size; }
+    return B;
+  }
+
+  let mode='weekly', offset=0, dailyB, weeklyB, monthlyB, yearlyB;
+
+  function getBuckets() {
+    if (mode==='daily'){if(!dailyB)dailyB=buildBuckets(dayKey);return dailyB;}
+    if (mode==='weekly'){if(!weeklyB)weeklyB=buildBuckets(weekKey);return weeklyB;}
+    if (mode==='monthly'){if(!monthlyB)monthlyB=buildBuckets(monthKey);return monthlyB;}
+    if(!yearlyB)yearlyB=buildBuckets(yearKey);return yearlyB;
+  }
+
+  const fmt = n => (n==null||isNaN(n))?'—':Math.round(n).toLocaleString();
+  const pct = (a,b) => b?(a/b*100).toFixed(1)+'%':'—';
+  function delta(c,p) {
+    if (p==null||c==null) return '<span style="font-size:10px;color:var(--color-text-secondary)">—</span>';
+    const d=c-p; if (!d) return '<span style="font-size:10px;color:var(--color-text-secondary)">—</span>';
+    return d>0?`<span style="font-size:10px;color:#3B6D11">▲ ${fmt(d)}</span>`:`<span style="font-size:10px;color:#A32D2D">▼ ${fmt(Math.abs(d))}</span>`;
+  }
+
+  const ROWS=[
+    {section:'Call volume'},
+    {key:'totalCalls',label:'Total calls handled',color:'#185FA5'},
+    {key:'csCalls',label:'Calls handled by CS',color:'#3B6D11',pctOf:'totalCalls'},
+    {key:'decCalls',label:'Calls handled by Decagon',color:'#534AB7',pctOf:'totalCalls'},
+    {key:'repCalls',label:'Repeat Decagon contacts',color:'#854F0B',extra:'repCustomers'},
+    {section:'Decagon performance'},
+    {key:'fullHandled',label:'Fully handled by Decagon',color:'#639922',pctOf:'decTickets'},
+    {key:'escalated',label:'Escalated to CS by Decagon',color:'#993C1D',pctOf:'decTickets'},
+    {key:'fcrMet',label:'Decagon FCR',color:'#1D9E75',pctOf:'decOnly',isPct:true},
+    {key:'contained',label:'Decagon containment rate',color:'#0F6E56',pctOf:'decTickets',isPct:true},
+    {key:'compliant',label:'Decagon compliance rate',color:'#7F77DD',pctOf:'decOnly',isPct:true},
+  ];
+
+  function render() {
+    const B=getBuckets();
+    const keys=Object.keys(B).sort();
+    const ps=mode==='daily'?7:mode==='weekly'?4:mode==='monthly'?12:keys.length;
+    const maxOff=Math.max(0,Math.floor((keys.length-ps)/ps));
+    const si=Math.max(0,Math.min(keys.length-ps,keys.length-ps-offset*ps));
+    const cols=keys.slice(si,si+ps);
+    if(!cols.length){el.innerHTML='<p style="padding:2rem;color:var(--color-text-secondary)">No data available</p>';return;}
+
+    const totP=cols.reduce((s,k)=>s+(B[k].totalCalls||0),0);
+    const csP=cols.reduce((s,k)=>s+(B[k].csCalls||0),0);
+    const decP=cols.reduce((s,k)=>s+(B[k].decCalls||0),0);
+    const pLabel=keyLabel(cols[0],mode)+' → '+keyLabel(cols[cols.length-1],mode);
+
+    const mBtn=m=>`<button onclick="window._tMode('${m}')" style="padding:6px 14px;font-size:12px;font-weight:500;border:${mode===m?'0.5px solid var(--color-border-secondary)':'none'};background:${mode===m?'var(--color-background-primary)':'transparent'};color:${mode===m?'var(--color-text-primary)':'var(--color-text-secondary)'};border-radius:6px;cursor:pointer">${m.charAt(0).toUpperCase()+m.slice(1)}</button>`;
+
+    let h=`<div style="padding:1rem">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px">
+      <div style="display:flex;gap:4px;background:var(--color-background-secondary);padding:4px;border-radius:8px;border:0.5px solid var(--color-border-tertiary)">${['daily','weekly','monthly','yearly'].map(mBtn).join('')}</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button onclick="window._tNav(-1)" style="width:28px;height:28px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);border-radius:8px;cursor:pointer;font-size:14px;color:var(--color-text-primary)">←</button>
+        <span style="font-size:12px;font-weight:500;color:var(--color-text-primary);min-width:200px;text-align:center">${pLabel}</span>
+        <button onclick="window._tNav(1)" style="width:28px;height:28px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);border-radius:8px;cursor:pointer;font-size:14px;color:var(--color-text-primary)">→</button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
+      <div style="background:var(--color-background-secondary);border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.04em">Total calls handled</div><div style="font-size:22px;font-weight:500;color:var(--color-text-primary);margin-top:2px">${fmt(totP)}</div><div style="font-size:11px;color:var(--color-text-secondary)">Period total</div></div>
+      <div style="background:var(--color-background-secondary);border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.04em">Calls handled by CS</div><div style="font-size:22px;font-weight:500;color:#3B6D11;margin-top:2px">${fmt(csP)}</div><div style="font-size:11px;color:var(--color-text-secondary)">${pct(csP,totP)} of total</div></div>
+      <div style="background:var(--color-background-secondary);border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.04em">Calls handled by Decagon</div><div style="font-size:22px;font-weight:500;color:#534AB7;margin-top:2px">${fmt(decP)}</div><div style="font-size:11px;color:var(--color-text-secondary)">${pct(decP,totP)} of total</div></div>
+    </div>
+    <div style="overflow-x:auto;border-radius:8px;border:0.5px solid var(--color-border-tertiary)">
+    <table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">
+      <thead><tr style="background:var(--color-background-secondary)">
+        <th style="padding:8px 12px;text-align:left;font-weight:500;font-size:11px;color:var(--color-text-secondary);border:0.5px solid var(--color-border-tertiary);width:200px">Metric</th>
+        ${cols.map(k=>`<th style="padding:8px 10px;text-align:center;font-weight:500;font-size:11px;color:var(--color-text-secondary);border:0.5px solid var(--color-border-tertiary)">${keyLabel(k,mode)}</th>`).join('')}
+      </tr></thead><tbody>`;
+
+    for (const row of ROWS) {
+      if (row.section){h+=`<tr><td colspan="${cols.length+1}" style="padding:6px 12px;font-size:10px;font-weight:500;color:var(--color-text-secondary);background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);text-transform:uppercase;letter-spacing:0.05em">${row.section}</td></tr>`;continue;}
+      h+=`<tr><td style="padding:8px 12px;font-size:12px;color:var(--color-text-secondary);background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-left:3px solid ${row.color};font-weight:500">${row.label}</td>`;
+      cols.forEach((k,i)=>{
+        const b=B[k]; const prev=i>0?B[cols[i-1]]:null;
+        const val=b[row.key]||0; const prevVal=prev?(prev[row.key]||0):null;
+        let display,sub='';
+        if(row.isPct){
+          const base=b[row.pctOf]||0; display=base?pct(val,base):'—';
+          if(prev){const pb=prev[row.pctOf]||0,pp=pb?(prev[row.key]||0)/pb*100:null,cp=base?val/base*100:null;if(pp!=null&&cp!=null){const d=cp-pp;if(d)sub='<br><span style="font-size:10px;color:'+(d>0?'#3B6D11':'#A32D2D')+'">'+(d>0?'▲':'▼')+Math.abs(d).toFixed(1)+'%</span>';}}
+        } else {
+          display=fmt(val);
+          if(prev) sub='<br>'+delta(val,prevVal);
+          if(row.pctOf){const base=b[row.pctOf]||0;if(base)sub+='<br><span style="font-size:10px;color:var(--color-text-secondary)">'+pct(val,base)+'</span>';}
+          if(row.extra&&b[row.extra]) sub+='<br><span style="font-size:10px;color:var(--color-text-secondary)">'+fmt(b[row.extra])+' customers</span>';
+        }
+        h+=`<td style="padding:8px 10px;text-align:center;border:0.5px solid var(--color-border-tertiary);vertical-align:top">${display}${sub}</td>`;
+      });
+      h+=`</tr>`;
+    }
+
+    h+=`</tbody></table></div>
+    <div style="margin-top:10px;display:flex;gap:16px;font-size:11px;color:var(--color-text-secondary)">
+      <span><span style="color:#3B6D11;font-weight:500">▲</span> Up vs prev</span>
+      <span><span style="color:#A32D2D;font-weight:500">▼</span> Down vs prev</span>
+      <span>Trend Analysis uses full dataset — unaffected by global date filter</span>
+    </div></div>`;
+
+    el.innerHTML=h;
+    window._tMode=m=>{mode=m;offset=0;render();};
+    window._tNav=dir=>{const ks=Object.keys(getBuckets()).sort();const ps2=mode==='daily'?7:mode==='weekly'?4:ks.length;const mo=Math.max(0,Math.floor((ks.length-ps2)/ps2));offset=Math.max(0,Math.min(mo,offset+dir));render();};
+  }
+  render();
+}
+
 function exportPDF() {
   if (!STATE.filteredTickets.size) { showToast('Upload data first','error'); return; }
   showToast('Generating PDF — please wait...', 'info');
@@ -1071,7 +1256,7 @@ function buildFCRTab(){
 }
 
 function setupNav(){
-  const TITLES={upload:'Data Source',kpis:'Executive KPIs',effectiveness:'Decagon Effectiveness',fcr:'FCR Analysis',compliance:'Decagon Compliance',defects:'System Defects',reasons:'Reason Analysis',executive:'Executive Summary',validation:'Data Validation',tickets:'Master Tickets',recontact:'Re-contact Analysis'};
+  const TITLES={upload:'Data Source',kpis:'Executive KPIs',trends:'Trend Analysis',effectiveness:'Decagon Effectiveness',fcr:'FCR Analysis',compliance:'Decagon Compliance',defects:'System Defects',reasons:'Reason Analysis',executive:'Executive Summary',validation:'Data Validation',tickets:'Master Tickets',recontact:'Re-contact Analysis'};
   document.querySelectorAll('.nav-item').forEach(item=>{
     item.addEventListener('click',()=>{
       document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
@@ -1081,7 +1266,7 @@ function setupNav(){
       document.getElementById('tab-'+tab)?.classList.add('active');
       document.getElementById('topbarTitle').textContent=TITLES[tab]||tab;
       if(tab==='fcr'){if(!STATE.fcrBuilt){buildFCRTab();STATE.fcrBuilt=true;}}
-      if(tab==='fcr'){if(!STATE.fcrBuilt){buildFCRTab();STATE.fcrBuilt=true;}}
+      if(tab==='trends'){if(!STATE.trendsBuilt){buildTrendsTab();STATE.trendsBuilt=true;}}
     });
   });
   document.getElementById('sidebarToggle').addEventListener('click',()=>{
