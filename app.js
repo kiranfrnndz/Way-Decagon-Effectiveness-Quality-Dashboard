@@ -529,7 +529,7 @@ function renderEffectivenessCharts(m){
   const decCounts=[...buckets.values()].map(ts=>ts.filter(t=>t.isDecagonTicket).length);
   const intCounts=[...buckets.values()].map(ts=>ts.reduce((s,t)=>s+t.aiInteractionCount,0));
   // FCR: closed + no CS + has reason / decagonOnly per day
-  const fcrRates=[...buckets.values()].map(ts=>{const d=ts.filter(t=>t.isDecagonTicket&&t.decagonOnly);return d.length?pct(d.filter(t=>t.fcrAchieved).length,d.length):0;});
+  const fcrRates=[...buckets.values()].map(ts=>{const d=ts.filter(t=>t.isDecagonTicket);return d.length?pct(d.filter(t=>t.fcrAchieved).length,d.length):0;});
   const csRates=[...buckets.values()].map(ts=>{const d=ts.filter(t=>t.isDecagonTicket);return d.length?pct(d.filter(t=>t.csAssisted).length,d.length):0;});
   const containRates=[...buckets.values()].map(ts=>{const d=ts.filter(t=>t.isDecagonTicket);return d.length?pct(d.filter(t=>t.decagonContained).length,d.length):0;});
 
