@@ -555,11 +555,15 @@ function renderEffectivenessCharts(m){
         ctx.save();ctx.fillStyle='#fff';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
         const y=bar.y+(bar.base-bar.y)/2;
         if(bar.base-bar.y>14)ctx.fillText(v,bar.x,y);
+        ctx.restore();
+      });
+    });
+  }};
   dChart('decagonTicketsTrend');
   STATE.charts.decagonTicketsTrend=new Chart(document.getElementById('decagonTicketsTrend'),{type:'bar',data:{labels,datasets:[
     {label:'Decagon Only',data:decOnlyCounts,backgroundColor:'rgba(2,132,199,0.6)'},
     {label:'CS Assisted',data:csAssistedCounts,backgroundColor:'rgba(239,68,68,0.7)'}
-  ]},options:{...base,plugins:{...base.plugins,legend:{display:true,position:'top',labels:{color:text,font:{size:11}}}},scales:{...base.scales,x:{...base.scales?.x,stacked:true,ticks:{color:text,font:{size:10},maxRotation:45},grid:{color:grid}},y:{...base.scales?.y,stacked:true,ticks:{color:text,font:{size:10}},grid:{color:grid},beginAtZero:true}}},plugins:[stackLabelPlugin}]});
+  ]},options:{...base,plugins:{...base.plugins,legend:{display:true,position:'top',labels:{color:text,font:{size:11}}}},scales:{...base.scales,x:{...base.scales?.x,stacked:true,ticks:{color:text,font:{size:10},maxRotation:45},grid:{color:grid}},y:{...base.scales?.y,stacked:true,ticks:{color:text,font:{size:10}},grid:{color:grid},beginAtZero:true}}},plugins:[stackLabelPlugin]});
 
   const csIntCounts=[...buckets.values()].map(ts=>ts.filter(t=>t.isDecagonTicket).reduce((s,t)=>s+t.humanInteractionCount,0));
   dChart('decagonIntsTrend');
@@ -849,14 +853,14 @@ function renderCEOSummary(m){
   const decTks=[...STATE.filteredTickets.values()].filter(t=>t.isDecagonTicket);
   const topHandled=countByReason(decTks.filter(t=>t.decagonOnly)).slice(0,3);
   const topCS=countByReason(decTks.filter(t=>t.csAssisted)).slice(0,3);
-  const trueTotalCalls=m.totalCallInts+m.decagonOnlyCount; const decagonShareOfCalls=pct(m.decagonOnlyCount,trueTotalCalls);
+  const decagonShareOfCalls=pct(m.totalAIInts,m.totalCallInts);
   const callsRoutedToDecagon=m.decagonTickets; // 1785
   const callsHandledAlone=m.decagonOnlyCount; // 1317
   const pctHandledAlone=pct(callsHandledAlone,callsRoutedToDecagon);
 
   // Key observations
   const obs=[];
-  obs.push(`Decagon handled <strong>${fmt.num(m.decagonTickets)} calls</strong> out of <strong>${fmt.num(trueTotalCalls)} total calls</strong> — representing <strong>${fmt.pct(decagonShareOfCalls)}</strong> of all voice interactions in the CRM.`);
+  obs.push(`Decagon handled <strong>${fmt.num(m.decagonTickets)} calls</strong> out of <strong>${fmt.num(m.totalCallInts)} total calls</strong> — representing <strong>${fmt.pct(decagonShareOfCalls)}</strong> of all voice interactions in the CRM.`);
   obs.push(`Of ${fmt.num(m.decagonTickets)} calls routed to Decagon, <strong>${fmt.num(callsHandledAlone)} (${fmt.pct(pctHandledAlone)})</strong> were handled by Decagon alone without CS involvement.`);
   obs.push(`<strong>${fmt.num(m.fcrCount)} tickets (${fmt.pct(m.fcrRate)})</strong> met FCR — single Decagon interaction with no further contact from the customer. Remaining <strong>${fmt.num(m.decagonTickets-m.fcrCount)}</strong> tickets had CS involvement, multiple AI interactions, or repeat contacts.`);
   obs.push(`<strong>${fmt.num(m.statusNotClosed)} call tickets are not closed</strong> after Decagon interaction — this is a Decagon API integration issue, not an agent issue.`);
@@ -877,7 +881,7 @@ function renderCEOSummary(m){
   document.getElementById('ceoSummaryCard').innerHTML=`<div class="ceo-content">
     <div class="ceo-meta-row">
       <div class="ceo-meta-item"><div class="ceo-meta-label">Total CRM Records</div><div class="ceo-meta-val">${fmt.num(m.totalRecords)}</div></div>
-      <div class="ceo-meta-item"><div class="ceo-meta-label">Total Calls (Human + Decagon)</div><div class="ceo-meta-val">${fmt.num(trueTotalCalls)}</div></div>
+      <div class="ceo-meta-item"><div class="ceo-meta-label">Total Calls (Human + Decagon)</div><div class="ceo-meta-val">${fmt.num(m.totalCallInts)}</div></div>
       <div class="ceo-meta-item"><div class="ceo-meta-label">Calls Routed to Decagon</div><div class="ceo-meta-val">${fmt.num(callsRoutedToDecagon)}</div></div>
       <div class="ceo-meta-item"><div class="ceo-meta-label">Calls Handled by Decagon Alone</div><div class="ceo-meta-val">${fmt.num(callsHandledAlone)}</div></div>
     </div>
@@ -1305,7 +1309,7 @@ function exportPDF() {
 function exportSummary(){
   if(!STATE.filteredTickets.size)return;
   const m=computeMetrics(STATE.filteredTickets);
-  const text=`WAY-DECAGON EXECUTIVE SUMMARY\nGenerated: ${new Date().toLocaleString()}\n${'='.repeat(50)}\nTotal Calls (Human + Decagon): ${fmt.num(trueTotalCalls)}\nCalls Routed to Decagon: ${fmt.num(m.decagonTickets)}\nCalls Handled by Decagon Alone: ${fmt.num(m.decagonOnlyCount)}\nEscalated to CS: ${fmt.num(m.csAssistedCount)}\nDecagon FCR: ${fmt.pct(m.fcrRate)}\nContainment Rate: ${fmt.pct(m.containmentRate)}\nCompliance Rate: ${fmt.pct(m.complianceRate)}\nCompliance Failures: ${fmt.num(m.complianceFailures)}\nStatus Not Closed: ${fmt.num(m.statusNotClosed)}\n`;
+  const text=`WAY-DECAGON EXECUTIVE SUMMARY\nGenerated: ${new Date().toLocaleString()}\n${'='.repeat(50)}\nTotal Calls (Human + Decagon): ${fmt.num(m.totalCallInts)}\nCalls Routed to Decagon: ${fmt.num(m.decagonTickets)}\nCalls Handled by Decagon Alone: ${fmt.num(m.decagonOnlyCount)}\nEscalated to CS: ${fmt.num(m.csAssistedCount)}\nDecagon FCR: ${fmt.pct(m.fcrRate)}\nContainment Rate: ${fmt.pct(m.containmentRate)}\nCompliance Rate: ${fmt.pct(m.complianceRate)}\nCompliance Failures: ${fmt.num(m.complianceFailures)}\nStatus Not Closed: ${fmt.num(m.statusNotClosed)}\n`;
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/plain'}));a.download='way_decagon_summary.txt';a.click();
   showToast('Summary exported','success');
 }
