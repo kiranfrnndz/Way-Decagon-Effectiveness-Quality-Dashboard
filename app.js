@@ -994,9 +994,7 @@ function buildTrendsTab() {
         const k=keyFn(i.dateStr);
         if (!k) continue;
         ensure(k);
-        B[k].totalCalls++;
-        if (i.type==='Call') B[k].csCalls++;
-        else B[k].decCalls++;
+        if (i.type==='Call') { B[k].totalCalls++; B[k].csCalls++; }
       }
     }
     const repCust = {};
@@ -1006,7 +1004,7 @@ function buildTrendsTab() {
       if (!k) continue;
       ensure(k);
       B[k].decTickets++;
-      if (tk.decagonOnly){B[k].fullHandled++;B[k].decOnly++;}
+      if (tk.decagonOnly){B[k].fullHandled++;B[k].decOnly++;B[k].decCalls++;B[k].totalCalls++;}
       if (tk.csAssisted) B[k].escalated++;
       if (tk.fcrAchieved) B[k].fcrMet++;
       B[k].totalDecTickets = (B[k].totalDecTickets||0) + 1;
