@@ -558,7 +558,6 @@ function renderEffectivenessCharts(m){
         ctx.restore();
       });
     });
-  }};
   dChart('decagonTicketsTrend');
   STATE.charts.decagonTicketsTrend=new Chart(document.getElementById('decagonTicketsTrend'),{type:'bar',data:{labels,datasets:[
     {label:'Decagon Only',data:decOnlyCounts,backgroundColor:'rgba(2,132,199,0.6)'},
