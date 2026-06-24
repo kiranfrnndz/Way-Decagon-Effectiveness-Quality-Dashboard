@@ -535,7 +535,7 @@ function getDateBuckets(ticketMap){
 function renderEffectivenessCharts(m){
   const{text,grid}=getCC();
   const buckets=getDateBuckets(STATE.filteredTickets);
-  const labels=[...buckets.keys()].map(d=>new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric'}));
+  const labels=[...buckets.keys()].map(d=>{const[y,mo,dy]=d.split('-');return new Date(y,mo-1,dy).toLocaleDateString('en-US',{month:'short',day:'numeric'});});
   const decCounts=[...buckets.values()].map(ts=>ts.filter(t=>t.isDecagonTicket).length);
   const intCounts=[...buckets.values()].map(ts=>ts.reduce((s,t)=>s+t.aiInteractionCount,0));
   // FCR: closed + no CS + has reason / decagonOnly per day
@@ -611,7 +611,7 @@ function renderComplianceSection(m){
   });
 
   const buckets=getDateBuckets(STATE.filteredTickets);
-  const labels=[...buckets.keys()].map(d=>new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric'}));
+  const labels=[...buckets.keys()].map(d=>{const[y,mo,dy]=d.split('-');return new Date(y,mo-1,dy).toLocaleDateString('en-US',{month:'short',day:'numeric'});});
   dChart('complianceBar');
   STATE.charts.complianceBar=new Chart(document.getElementById('complianceBar'),{
     type:'bar',
