@@ -537,7 +537,7 @@ function renderEffectivenessCharts(m){
   const buckets=getDateBuckets(STATE.filteredTickets);
   const labels=[...buckets.keys()].map(d=>{const[y,mo,dy]=d.split('-');return new Date(y,mo-1,dy).toLocaleDateString('en-US',{month:'short',day:'numeric'});});
   const decCounts=[...buckets.values()].map(ts=>ts.filter(t=>t.isDecagonTicket).length);
-  const intCounts=[...buckets.values()].map(ts=>ts.reduce((s,t)=>s+t.aiInteractionCount,0));
+  const intCounts=[...buckets.values()].map(ts=>ts.filter(t=>t.isDecagonTicket).length);
   // FCR: closed + no CS + has reason / decagonOnly per day
   const fcrRates=[...buckets.values()].map(ts=>{const d=ts.filter(t=>t.isDecagonTicket);return d.length?pct(d.filter(t=>t.fcrAchieved).length,d.length):0;});
   const csRates=[...buckets.values()].map(ts=>{const d=ts.filter(t=>t.isDecagonTicket);return d.length?pct(d.filter(t=>t.csAssisted).length,d.length):0;});
