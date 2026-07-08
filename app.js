@@ -62,7 +62,7 @@ function parseDateStr(d){
 }
 
 // ── COLUMN MAP ──
-const COL_C={ticketId:['Ticket ID','ticket_id'],ogi:['OGI','ogi'],interaction:['Interaction','Interaction Type'],intDate:['Interaction date','Interaction Date','Created Date'],intId:['Interaction ID'],reason:['Reason'],subReason:['Sub Reason','sub_reason'],action:['Action','Action Taken'],status:['Status'],userId:['UserID','User ID','user_id'],agent:['Agent Name'],vertical:['Vertical'],subVertical:['SubVertical','Sub Vertical'],ticketCreatedDate:['Ticket_created_date','Ticket Created Date']};
+const COL_C={ticketId:['Ticket ID','ticket_id'],ogi:['OGI','ogi'],interaction:['Interaction','Interaction Type'],intDate:['Interaction date','Interaction Date','Created Date'],intId:['Interaction ID'],reason:['Reason'],subReason:['Sub Reason','sub_reason'],action:['Action','Action Taken'],status:['Status'],userId:['UserID','User ID','user_id'],custPhone:['Cust Ph No','Customer Phone','Phone'],agent:['Agent Name'],vertical:['Vertical'],subVertical:['SubVertical','Sub Vertical'],ticketCreatedDate:['Ticket_created_date','Ticket Created Date']};
 function buildColMap(headers){const m={};Object.entries(COL_C).forEach(([k,cs])=>{m[k]=cs.find(c=>headers.find(h=>h&&h.trim().toLowerCase()===c.toLowerCase()))||null;});return m;}
 function getV(row,col){return col?String(row[col]||'').trim():'';}
 
@@ -154,7 +154,8 @@ function enrichTicket(tk){
     tk.statusNotClosed=st!=='closed';
     tk.missingAction=tk.wrongAction;
     tk.compliant=!tk.missingReason&&!tk.missingSubReason&&!tk.wrongAction&&!tk.openStatus&&!tk.pendingStatus&&!tk.otherStatus&&st==='closed';
-  }else{tk.missingReason=tk.missingSubReason=tk.wrongAction=tk.missingAction=tk.openStatus=tk.pendingStatus=tk.otherStatus=tk.statusNotClosed=false;tk.compliant=false;}
+    tk.primaryViolation=tk.compliant?'none':(tk.missingReason?'missingReason':tk.missingSubReason?'missingSubReason':tk.wrongAction?'wrongAction':tk.openStatus?'openStatus':tk.pendingStatus?'pendingStatus':tk.otherStatus?'otherStatus':'none');
+  }else{tk.missingReason=tk.missingSubReason=tk.wrongAction=tk.missingAction=tk.openStatus=tk.pendingStatus=tk.otherStatus=tk.statusNotClosed=false;tk.compliant=false;tk.primaryViolation='n/a';}
 
   // FCR: Decagon-only + closed + has reason
   tk.fcrAchieved=false; // computed after computeShortIntervalDefects
@@ -193,13 +194,19 @@ function computeMetrics(ticketMap){
   const csAssistedCount=dec.filter(t=>t.csAssisted).length; // 468
   const containedCount=dec.filter(t=>t.decagonContained).length; // 1317
   const fcrCount=dec.filter(t=>t.fcrAchieved).length; // 34
-  const t_full=decOnly.filter(t=>t.compliant).length;
-  const t_reason=decOnly.filter(t=>t.missingReason).length;
-  const t_sub=decOnly.filter(t=>t.missingSubReason).length;
-  const t_action=decOnly.filter(t=>t.wrongAction).length;
-  const t_open=decOnly.filter(t=>t.openStatus).length;
-  const t_pending=decOnly.filter(t=>t.pendingStatus).length;
-  const t_other=decOnly.filter(t=>t.otherStatus).length;
+  const t_full=decOnly.filter(t=>t.primaryViolation==='none').length;
+  const t_reason=decOnly.filter(t=>t.primaryViolation==='missingReason').length;
+  const t_sub=decOnly.filter(t=>t.primaryViolation==='missingSubReason').length;
+  const t_action=decOnly.filter(t=>t.primaryViolation==='wrongAction').length;
+  const t_open=decOnly.filter(t=>t.primaryViolation==='openStatus').length;
+  const t_pending=decOnly.filter(t=>t.primaryViolation==='pendingStatus').length;
+  const t_other=decOnly.filter(t=>t.primaryViolation==='otherStatus').length;
+  const t_any_reason=decOnly.filter(t=>t.missingReason).length;
+  const t_any_sub=decOnly.filter(t=>t.missingSubReason).length;
+  const t_any_action=decOnly.filter(t=>t.wrongAction).length;
+  const t_any_open=decOnly.filter(t=>t.openStatus).length;
+  const t_any_pending=decOnly.filter(t=>t.pendingStatus).length;
+  const t_any_other=decOnly.filter(t=>t.otherStatus).length;
   const missingReason=t_reason, missingSubReason=t_sub, missingAction=t_action;
   const statusNotClosed=decOnly.filter(t=>t.statusNotClosed).length;
   const pendingStatus=t_pending;
@@ -208,14 +215,23 @@ function computeMetrics(ticketMap){
   decOnly.forEach(t=>{const k=groupKey(t);if(!groups.has(k))groups.set(k,{missingReason:false,missingSubReason:false,wrongAction:false,openStatus:false,pendingStatus:false,otherStatus:false,tickets:[]});const g=groups.get(k);g.tickets.push(t);if(t.missingReason)g.missingReason=true;if(t.missingSubReason)g.missingSubReason=true;if(t.wrongAction)g.wrongAction=true;if(t.openStatus)g.openStatus=true;if(t.pendingStatus)g.pendingStatus=true;if(t.otherStatus)g.otherStatus=true;});
   const uniqueGroups=groups.size;
   let g_full=0,g_reason=0,g_sub=0,g_action=0,g_open=0,g_pending=0,g_other=0;
+  let g_any_reason=0,g_any_sub=0,g_any_action=0,g_any_open=0,g_any_pending=0,g_any_other=0;
   for(const g of groups.values()){
-    if(g.missingReason)g_reason++;
-    if(g.missingSubReason)g_sub++;
-    if(g.wrongAction)g_action++;
-    if(g.openStatus)g_open++;
-    if(g.pendingStatus)g_pending++;
-    if(g.otherStatus)g_other++;
-    if(!g.missingReason&&!g.missingSubReason&&!g.wrongAction&&!g.openStatus&&!g.pendingStatus&&!g.otherStatus)g_full++;
+    if(g.missingReason)g_any_reason++;
+    if(g.missingSubReason)g_any_sub++;
+    if(g.wrongAction)g_any_action++;
+    if(g.openStatus)g_any_open++;
+    if(g.pendingStatus)g_any_pending++;
+    if(g.otherStatus)g_any_other++;
+    const pv=g.missingReason?'missingReason':g.missingSubReason?'missingSubReason':g.wrongAction?'wrongAction':g.openStatus?'openStatus':g.pendingStatus?'pendingStatus':g.otherStatus?'otherStatus':'none';
+    g.primaryViolation=pv;
+    if(pv==='none')g_full++;
+    else if(pv==='missingReason')g_reason++;
+    else if(pv==='missingSubReason')g_sub++;
+    else if(pv==='wrongAction')g_action++;
+    else if(pv==='openStatus')g_open++;
+    else if(pv==='pendingStatus')g_pending++;
+    else if(pv==='otherStatus')g_other++;
   }
   const compliantCount=g_full;
   const sameTimestampInts=dec.reduce((s,t)=>s+t.sameTimestampInteractions,0);
@@ -281,6 +297,8 @@ function computeMetrics(ticketMap){
     missingReason,missingSubReason,missingAction,statusNotClosed,pendingStatus,
     complianceGroups:uniqueGroups,g_full,g_reason,g_sub,g_action,g_open,g_pending,g_other,
     t_full,t_reason,t_sub,t_action,t_open,t_pending,t_other,
+    t_any_reason,t_any_sub,t_any_action,t_any_open,t_any_pending,t_any_other,
+    g_any_reason,g_any_sub,g_any_action,g_any_open,g_any_pending,g_any_other,
     ticketComplianceRate:pct(t_full,decOnlyCount),
     complianceGroupsMap:groups,
     sameTimestampInts,shortIntervalInts,dupTicketCount,
@@ -366,7 +384,7 @@ function processRows(rows,filename){
     const cm=STATE.colMap,map=new Map();
     rows.forEach(row=>{
       const tid=getV(row,cm.ticketId);if(!tid)return;
-      if(!map.has(tid))map.set(tid,{ticketId:tid,ogi:getV(row,cm.ogi)||'UNKNOWN',userId:getV(row,cm.userId)||'',createdDate:getV(row,cm.ticketCreatedDate)||getV(row,cm.intDate),reason:getV(row,cm.reason),subReason:getV(row,cm.subReason),actionTaken:getV(row,cm.action),status:getV(row,cm.status),vertical:getV(row,cm.vertical),subVertical:getV(row,cm.subVertical),interactions:[]});
+      if(!map.has(tid))map.set(tid,{ticketId:tid,ogi:getV(row,cm.ogi)||'UNKNOWN',userId:getV(row,cm.userId)||'',custPhone:getV(row,cm.custPhone)||'',createdDate:getV(row,cm.ticketCreatedDate)||getV(row,cm.intDate),reason:getV(row,cm.reason),subReason:getV(row,cm.subReason),actionTaken:getV(row,cm.action),status:getV(row,cm.status),vertical:getV(row,cm.vertical),subVertical:getV(row,cm.subVertical),interactions:[]});
       const tk=map.get(tid);
       tk.interactions.push({interactionId:getV(row,cm.intId),type:getV(row,cm.interaction),createdDate:getV(row,cm.intDate),dateStr:parseDateStr(getV(row,cm.intDate)),parsedDate:parseDate(getV(row,cm.intDate)),reason:getV(row,cm.reason),subReason:getV(row,cm.subReason),actionTaken:getV(row,cm.action),agent:getV(row,cm.agent),status:getV(row,cm.status)});
       if(!tk.reason&&getV(row,cm.reason))tk.reason=getV(row,cm.reason);
@@ -394,7 +412,7 @@ function processRows(rows,filename){
           const allDates=[...map.values()].filter(t=>t.dateBucket).map(t=>t.dateBucket);
           if(allDates.length){const minD=allDates.reduce((a,b)=>a<b?a:b);const maxD=allDates.reduce((a,b)=>a>b?a:b);document.getElementById('globalDateFrom').value=minD;document.getElementById('globalDateTo').value=maxD;document.getElementById('dateRangeBar').style.display='flex';}
           document.getElementById('dataBadge').style.display='flex';
-          document.getElementById('dataBadgeText').textContent=fmt.num(m.decagonTickets)+' Decagon Calls';
+          document.getElementById('dataBadgeText').innerHTML=fmt.num(m.decagonTickets)+' Decagon Calls'+(m.decagonOnlyCount?'<span style="display:block;font-size:10px;font-weight:400;color:#64748b;line-height:1.2;margin-top:1px">'+fmt.num(m.decagonOnlyCount)+' Decagon-only</span>':'');
           pg.style.display='none';
           renderValidationBreakdown();
           renderDashboard();
@@ -667,13 +685,7 @@ function renderComplianceSection(m){
       const drill=el.dataset.drill;
       const tickets=[...STATE.filteredTickets.values()].filter(t=>{
         if(!t.isDecagonTicket||!t.decagonOnly)return false;
-        if(drill==='missingReason')return t.missingReason;
-        if(drill==='missingSubReason')return t.missingSubReason;
-        if(drill==='wrongAction')return t.wrongAction;
-        if(drill==='openStatus')return t.openStatus;
-        if(drill==='pendingStatus')return t.pendingStatus;
-        if(drill==='otherStatus')return t.otherStatus;
-        return false;
+        return t.primaryViolation===drill;
       });
       document.getElementById('compDrillTitle').textContent=(el.previousElementSibling?.textContent||'Drill')+' — '+fmt.num(tickets.length)+' call tickets';
       if(STATE.datatables.compDrill){STATE.datatables.compDrill.destroy();document.getElementById('compDrillTable').innerHTML='';}
@@ -871,7 +883,7 @@ function showTimeline(ticketId){
   const tk=STATE.filteredTickets.get(String(ticketId))||STATE.ticketMap.get(String(ticketId));
   if(!tk)return;
   document.getElementById('timelineTicketId').textContent='Ticket: '+ticketId;
-  document.getElementById('timelineTicketMeta').textContent='OGI: '+tk.ogi+' · '+tk.interactions.length+' interactions · FCR: '+(tk.fcrAchieved?'Pass':'Fail')+' · '+(tk.subVertical||tk.vertical||'');
+  document.getElementById('timelineTicketMeta').textContent='OGI: '+tk.ogi+(tk.custPhone?' · Phone: '+tk.custPhone:'')+(tk.userId?' · User: '+tk.userId:'')+' · '+tk.interactions.length+' interactions · FCR: '+(tk.fcrAchieved?'Pass':'Fail')+' · '+(tk.subVertical||tk.vertical||'');
   const tsCount={};tk.interactions.forEach(i=>{if(i.parsedDate)tsCount[i.parsedDate]=(tsCount[i.parsedDate]||0)+1;});
   const html=tk.interactions.map((int,idx)=>{
     let dc=CONFIG.INTERNAL.includes(int.type)?'internal':int.type===CONFIG.AI_TYPE?'ai':CONFIG.CUSTOMER_FACING.includes(int.type)?'human':'internal';
