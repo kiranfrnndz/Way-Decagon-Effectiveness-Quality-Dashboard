@@ -157,18 +157,6 @@
         <div class="chart-card compact-chart"><div class="chart-hdr">Compliance Breakdown</div><div class="pie-wrap"><canvas id="compliancePie"></canvas></div></div>
         <div class="chart-card"><div class="chart-hdr">Missing Fields by Date</div><canvas id="complianceBar"></canvas></div>
       </div>
-            <div class="section-block ticket-level-section" style="margin-top:1.5rem;padding:1.25rem;background:#fff;border:1px solid #e2e8f0;border-radius:12px;">
-        <h3 class="block-title" style="margin:0 0 0.4rem 0;font-size:0.95rem;font-weight:600;color:#0f172a;display:flex;align-items:center;gap:0.5rem;"><i class="fa-solid fa-magnifying-glass" style="color:#0d9488;"></i> Ticket-Level Detail</h3>
-        <p style="font-size:0.82rem;color:#64748b;margin:0 0 1rem 0;">Per-ticket breakdown for deep-dive auditing. Click any row to open the drill-down table. A single order/user may span multiple tickets.</p>
-        <div class="compliance-breakdown">
-          <div class="comp-item"><span class="ci-icon pass"><i class="fa-solid fa-circle-check"></i></span><span class="ci-label">Fully Compliant</span><span class="ci-val" id="tv-full">—</span></div>
-          <div class="comp-item"><span class="ci-icon fail"><i class="fa-solid fa-circle-xmark"></i></span><span class="ci-label">Missing Reason</span><span class="ci-val drill" data-drill="missingReason" id="tv-reason">—</span></div>
-          <div class="comp-item"><span class="ci-icon fail"><i class="fa-solid fa-circle-xmark"></i></span><span class="ci-label">Missing Sub Reason</span><span class="ci-val drill" data-drill="missingSubReason" id="tv-sub">—</span></div>
-          <div class="comp-item"><span class="ci-icon fail"><i class="fa-solid fa-circle-xmark"></i></span><span class="ci-label">Wrong Action Taken</span><span class="ci-val drill" data-drill="wrongAction" id="tv-action">—</span></div>
-          <div class="comp-item"><span class="ci-icon fail"><i class="fa-solid fa-circle-xmark"></i></span><span class="ci-label">Open Status</span><span class="ci-val drill" data-drill="openStatus" id="tv-open">—</span></div>
-          <div class="comp-item"><span class="ci-icon fail"><i class="fa-solid fa-circle-xmark"></i></span><span class="ci-label">Pending Status</span><span class="ci-val drill" data-drill="pendingStatus" id="tv-pending">—</span></div>
-          <div class="comp-item" id="tv-other-row" style="display:none;"><span class="ci-icon fail"><i class="fa-solid fa-circle-xmark"></i></span><span class="ci-label">Other Status</span><span class="ci-val drill" data-drill="otherStatus" id="tv-other">—</span></div>
-        </div>
       </div>
       <div class="drill-wrap" id="compDrillWrap" style="display:none">
         <div class="drill-hdr"><h4 id="compDrillTitle">Drill-down</h4><button class="btn-close-drill" id="closeCompDrill"><i class="fa-solid fa-xmark"></i></button></div>
@@ -355,6 +343,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="app.js?v=18"></script>
+<script src="app.js?v=19"></script>
 </body>
 </html>
