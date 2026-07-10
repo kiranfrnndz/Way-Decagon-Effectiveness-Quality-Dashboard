@@ -61,6 +61,16 @@ function parseDateStr(d){
   return null;
 }
 
+// ── CANONICAL CUSTOMER IDENTITY (Fix 2) ──
+// Single source of truth for "who is this customer/order": OGI first, else UserID, else ticketId.
+// Type-prefixed (O:/U:/T:) so a numeric OGI can never collide with a numeric UserID.
+// Mirrors the long-standing groupKey logic; centralized here so all tabs dedupe identically.
+function custKey(t){
+  if(t&&t.ogi&&t.ogi!=='UNKNOWN')return 'O:'+t.ogi;
+  if(t&&t.userId)return 'U:'+t.userId;
+  return 'T:'+(t?t.ticketId:'');
+}
+
 // ── COLUMN MAP ──
 const COL_C={ticketId:['Ticket ID','ticket_id'],ogi:['OGI','ogi'],interaction:['Interaction','Interaction Type'],intDate:['Interaction date','Interaction Date','Created Date'],intId:['Interaction ID'],reason:['Reason'],subReason:['Sub Reason','sub_reason'],action:['Action','Action Taken'],status:['Status'],userId:['UserID','User ID','user_id'],custPhone:['Cust Ph No','Customer Phone','Phone'],agent:['Agent Name'],vertical:['Vertical'],subVertical:['SubVertical','Sub Vertical'],ticketCreatedDate:['Ticket_created_date','Ticket Created Date']};
 function buildColMap(headers){const m={};Object.entries(COL_C).forEach(([k,cs])=>{m[k]=cs.find(c=>headers.find(h=>h&&h.trim().toLowerCase()===c.toLowerCase()))||null;});return m;}
@@ -104,6 +114,11 @@ function validateData(rows){
       records:rows.length,
       uniqueOGI:new Set(rows.map(r=>getV(r,cm.ogi)).filter(Boolean)).size,
       uniqueTickets:new Set(rows.map(r=>getV(r,cm.ticketId)).filter(Boolean)).size,
+      uniqueCustomers:new Set(rows.map(r=>{ // Fix 4: canonical identity OGI->UserID->ticketId (matches custKey)
+        const o=getV(r,cm.ogi);if(o&&String(o).trim()&&String(o).trim()!=='UNKNOWN')return 'O:'+String(o).trim();
+        const u=getV(r,cm.userId);if(u&&String(u).trim())return 'U:'+String(u).trim();
+        const t=getV(r,cm.ticketId);return t?'T:'+t:null;
+      }).filter(Boolean)).size,
       totalInteractions:rows.length,
       aiInteractions:STATE.totalAIInteractions,
       humanInteractions:rows.filter(r=>{const t=getV(r,cm.interaction);return CONFIG.CUSTOMER_FACING.includes(t)&&t!==CONFIG.AI_TYPE;}).length,
@@ -122,6 +137,9 @@ function enrichTicket(tk){
   // Decagon ticket = any ticket with at least one AI-Agent Call interaction
   tk.isDecagonTicket=firstAI!==null;
   tk.aiInteractionCount=aiInts.length;
+  // Fix 6: Decagon-created = the earliest interaction on the ticket (by date) is an AI interaction.
+  {const dated=ints.filter(i=>i.parsedDate).slice().sort((a,b)=>a.parsedDate-b.parsedDate);
+   tk.aiFirst=dated.length>0&&dated[0].type===CONFIG.AI_TYPE;}
   tk.humanInteractionCount=humanInts.length;
   tk.internalInteractionCount=ints.filter(i=>CONFIG.INTERNAL.includes(i.type)).length;
   tk.customerFacingCount=cf.length;
@@ -210,7 +228,7 @@ function computeMetrics(ticketMap){
   const missingReason=t_reason, missingSubReason=t_sub, missingAction=t_action;
   const statusNotClosed=decOnly.filter(t=>t.statusNotClosed).length;
   const pendingStatus=t_pending;
-  const groupKey=t=>t.ogi&&t.ogi!=='UNKNOWN'?'O:'+t.ogi:(t.userId?'U:'+t.userId:'T:'+t.ticketId);
+  const groupKey=custKey; // Fix 2: single source of truth (was duplicated inline; proven identical)
   const groups=new Map();
   decOnly.forEach(t=>{const k=groupKey(t);if(!groups.has(k))groups.set(k,{missingReason:false,missingSubReason:false,wrongAction:false,openStatus:false,pendingStatus:false,otherStatus:false,tickets:[]});const g=groups.get(k);g.tickets.push(t);if(t.missingReason)g.missingReason=true;if(t.missingSubReason)g.missingSubReason=true;if(t.wrongAction)g.wrongAction=true;if(t.openStatus)g.openStatus=true;if(t.pendingStatus)g.pendingStatus=true;if(t.otherStatus)g.otherStatus=true;});
   const uniqueGroups=groups.size;
@@ -514,6 +532,7 @@ function renderValidation(val){
   document.getElementById('vv-records').textContent=fmt.num(counts.records);
   document.getElementById('vv-ogi').textContent=fmt.num(counts.uniqueOGI);
   document.getElementById('vv-tickets').textContent=fmt.num(counts.uniqueTickets);
+  {const el=document.getElementById('vv-customers');if(el)el.textContent=fmt.num(counts.uniqueCustomers);} // Fix 4
   document.getElementById('vv-interactions').textContent=fmt.num(counts.totalInteractions);
   document.getElementById('vv-ai').textContent=fmt.num(counts.aiInteractions);
   document.getElementById('vv-human').textContent=fmt.num(counts.humanInteractions);
@@ -538,7 +557,7 @@ function renderKPIs(m){
   const colorMap={cyan:{a:'var(--cyan)',d:'var(--cyan-dim)'},purple:{a:'var(--purple)',d:'var(--purple-dim)'},green:{a:'var(--green)',d:'var(--green-dim)'},amber:{a:'var(--amber)',d:'var(--amber-dim)'},red:{a:'var(--red)',d:'var(--red-dim)'}};
 
   const kpis=[
-    {label:'Calls Handled by Decagon',mainVal:fmt.num(m.decagonTickets),subVal:null,icon:'fa-robot',color:'cyan',tip:'Unique calls where Decagon (AI-Agent Call) was the first customer-facing interaction',lvl:'Ticket'},
+    {label:'Total Calls Passed to Decagon',mainVal:fmt.num(m.decagonTickets),subVal:null,icon:'fa-robot',color:'cyan',tip:'Unique calls where Decagon (AI-Agent Call) was the first customer-facing interaction',lvl:'Ticket'},
     {label:'Interactions by Decagon',mainVal:fmt.num(m.totalAIInts),subVal:`Avg ${m.avgAIPerTicket.toFixed(2)} AI interactions per ticket`,icon:'fa-comments',color:'purple',tip:`Total AI-Agent Call interaction records. ${fmt.num(m.multiAIDec)} tickets had >1 AI interaction (repeat rate: ${m.repeatRate.toFixed(1)}%)`,lvl:'Interaction'},
     {label:'Decagon FCR',mainVal:fmt.pct(m.fcrRate),subVal:fmt.num(m.fcrCount)+' calls',icon:'fa-bullseye',color:'green',tip:'FCR Met: single Decagon interaction with no further CS involvement or repeat contact. Base: all '+fmt.num(m.decagonTickets)+' Decagon tickets',lvl:'Ticket'},
     {label:'Decagon Containment Rate',mainVal:fmt.pct(m.containmentRate),subVal:fmt.num(m.containedCount)+' calls',icon:'fa-shield-halved',color:'green',tip:'Calls where no CS agent was involved after Decagon. 1,785 - 468 = 1,317',lvl:'Ticket'},
@@ -585,8 +604,6 @@ function renderEffectivenessCharts(m){
   const{text,grid}=getCC();
   const buckets=getDateBuckets(STATE.filteredTickets);
   const labels=[...buckets.keys()].map(d=>{const[y,mo,dy]=d.split('-');return new Date(y,mo-1,dy).toLocaleDateString('en-US',{month:'short',day:'numeric'});});
-  const decCounts=[...buckets.values()].map(ts=>ts.filter(t=>t.isDecagonTicket).length);
-  const intCounts=[...buckets.values()].map(ts=>ts.filter(t=>t.isDecagonTicket).length);
   // FCR: closed + no CS + has reason / decagonOnly per day
   const fcrRates=[...buckets.values()].map(ts=>{const d=ts.filter(t=>t.isDecagonTicket);return d.length?pct(d.filter(t=>t.fcrAchieved).length,d.length):0;});
   const csRates=[...buckets.values()].map(ts=>{const d=ts.filter(t=>t.isDecagonTicket);return d.length?pct(d.filter(t=>t.csAssisted).length,d.length):0;});
@@ -596,6 +613,9 @@ function renderEffectivenessCharts(m){
 
   const decOnlyCounts=[...buckets.values()].map(ts=>ts.filter(t=>t.isDecagonTicket&&t.decagonOnly).length);
   const csAssistedCounts=[...buckets.values()].map(ts=>ts.filter(t=>t.isDecagonTicket&&t.csAssisted).length);
+  // Fix 8: per-day Decagon Tickets Created (AI-first) and Interactions Created (all AI interactions)
+  const ticketsCreatedCounts=[...buckets.values()].map(ts=>ts.filter(t=>t.isDecagonTicket&&t.aiFirst).length);
+  const interactionsCreatedCounts=[...buckets.values()].map(ts=>ts.filter(t=>t.isDecagonTicket).reduce((s,t)=>s+(t.aiInteractionCount||0),0));
   const stackLabelPlugin={id:'stackLabels',afterDatasetsDraw(chart){
     const ctx=chart.ctx;
     chart.data.datasets.forEach((ds,di)=>{
@@ -614,7 +634,6 @@ function renderEffectivenessCharts(m){
     {label:'CS Assisted',data:csAssistedCounts,backgroundColor:'rgba(239,68,68,0.7)'}
   ]},options:{...base,plugins:{...base.plugins,legend:{display:true,position:'top',labels:{color:text,font:{size:11}}}},scales:{...base.scales,x:{...base.scales?.x,stacked:true,ticks:{color:text,font:{size:10},maxRotation:45},grid:{color:grid}},y:{...base.scales?.y,stacked:true,ticks:{color:text,font:{size:10}},grid:{color:grid},beginAtZero:true}}},plugins:[stackLabelPlugin]});
 
-  const csIntCounts=[...buckets.values()].map(ts=>ts.filter(t=>t.isDecagonTicket).reduce((s,t)=>s+t.humanInteractionCount,0));
   dChart('decagonIntsTrend');
   const stackLabelPlugin2={id:'stackLabels2',afterDatasetsDraw(chart){
     const ctx=chart.ctx;
@@ -630,9 +649,9 @@ function renderEffectivenessCharts(m){
     });
   }};
   STATE.charts.decagonIntsTrend=new Chart(document.getElementById('decagonIntsTrend'),{type:'bar',data:{labels,datasets:[
-    {label:'AI Interactions',data:intCounts,backgroundColor:'rgba(124,58,237,0.6)'},
-    {label:'CS Interactions',data:csIntCounts,backgroundColor:'rgba(239,68,68,0.7)'}
-  ]},options:{...base,plugins:{...base.plugins,legend:{display:true,position:'top',labels:{color:text,font:{size:11}}}},scales:{...base.scales,x:{...base.scales?.x,stacked:true,ticks:{color:text,font:{size:10},maxRotation:45},grid:{color:grid}},y:{...base.scales?.y,stacked:true,ticks:{color:text,font:{size:10}},grid:{color:grid},beginAtZero:true}}},plugins:[stackLabelPlugin2]});
+    {label:'Tickets Created',data:ticketsCreatedCounts,backgroundColor:'rgba(15,110,86,0.75)'},
+    {label:'Interactions Created',data:interactionsCreatedCounts,backgroundColor:'rgba(124,58,237,0.6)'}
+  ]},options:{...base,plugins:{...base.plugins,legend:{display:true,position:'top',labels:{color:text,font:{size:11}}}},scales:{...base.scales,x:{...base.scales?.x,stacked:false,ticks:{color:text,font:{size:10},maxRotation:45},grid:{color:grid}},y:{...base.scales?.y,stacked:false,ticks:{color:text,font:{size:10}},grid:{color:grid},beginAtZero:true}}},plugins:[stackLabelPlugin2]});
 
   dChart('fcrTrend');
   STATE.charts.fcrTrend=new Chart(document.getElementById('fcrTrend'),{type:'line',data:{labels,datasets:[{label:'Decagon FCR %',data:fcrRates,borderColor:'#059669',backgroundColor:'rgba(5,150,105,0.1)',fill:true,tension:0.4,pointRadius:3}]},options:{...base,scales:{x:{ticks:{color:text,font:{size:10},maxRotation:45},grid:{color:grid}},y:{ticks:{color:text,font:{size:10},callback:v=>v+'%'},grid:{color:grid},beginAtZero:true,max:100}}}});
@@ -788,9 +807,31 @@ function getDisplayReason(tk){
   return null;
 }
 
+// Fix 9: AOP grouping. Rolls specific parent Reasons up into an AOP bucket; everything else
+// falls through to the normal sub-reason/reason display. Extend AOP_MAP as more buckets are defined,
+// or replace with the authoritative AOP column join once the Decagon export includes it.
+const AOP_MAP={
+  'shuttle enquiry':'Shuttle AOP',
+  'shuttle issue':'Shuttle AOP',
+  'confirmation missing':'Confirmation AOP'
+};
+function getAOP(tk){
+  const r=(tk.reason||'').trim().toLowerCase();
+  if(AOP_MAP[r])return AOP_MAP[r];
+  return getDisplayReason(tk);
+}
+
 function countByReason(tickets){
   const c={};
   tickets.forEach(t=>{const r=getDisplayReason(t);if(!r)return;c[r]=(c[r]||0)+1;});
+  return Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,10);
+}
+
+// Fix 9: AOP-grouped counterpart used only by the Reason Analysis chart/drill.
+// countByReason is left unchanged so other callers (CEO summary, etc.) keep sub-reason granularity.
+function countByAOP(tickets){
+  const c={};
+  tickets.forEach(t=>{const r=getAOP(t);if(!r)return;c[r]=(c[r]||0)+1;});
   return Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,10);
 }
 
@@ -809,7 +850,7 @@ function renderReasonAnalysis(m){
 
 function renderReasonChart(tab){
   const tickets=STATE.reasonData[tab]||[];
-  const data=countByReason(tickets);
+  const data=countByAOP(tickets); // Fix 9: AOP-grouped bars
   const{text,grid}=getCC();
   const colors={handled:'rgba(2,132,199,0.7)',cs:'rgba(217,119,6,0.7)',comp:'rgba(220,38,38,0.7)'};
   dChart('reasonChart');
@@ -817,7 +858,7 @@ function renderReasonChart(tab){
     type:'bar',
     data:{labels:data.map(d=>d[0]),datasets:[{label:'Calls',data:data.map(d=>d[1]),backgroundColor:colors[tab]||colors.handled,borderRadius:4}]},
     options:{
-      indexAxis:'y',responsive:true,
+      indexAxis:'y',responsive:true,maintainAspectRatio:false,
       onClick:(evt,els)=>{if(!els.length)return;showReasonDetail(data[els[0].index][0],tab);},
       plugins:{legend:{display:false},tooltip:{backgroundColor:'#fff',titleColor:'#0f172a',bodyColor:'#475569',borderColor:'#e2e8f0',borderWidth:1}},
       scales:{x:{ticks:{color:text,font:{size:10}},grid:{color:grid}},y:{ticks:{color:text,font:{size:10}}}}
@@ -827,7 +868,7 @@ function renderReasonChart(tab){
 
 function showReasonDetail(reason,tab){
   const allDecTks=[...STATE.filteredTickets.values()].filter(t=>t.isDecagonTicket);
-  const reasonTks=allDecTks.filter(t=>getDisplayReason(t)===reason);
+  const reasonTks=allDecTks.filter(t=>getAOP(t)===reason); // Fix 9: match on AOP so grouped bars drill into full set
   const total=reasonTks.length;
   const decHandled=reasonTks.filter(t=>t.decagonOnly).length;
   const csHandled=reasonTks.filter(t=>t.csAssisted).length;
@@ -880,7 +921,16 @@ function showTimeline(ticketId){
   const tk=STATE.filteredTickets.get(String(ticketId))||STATE.ticketMap.get(String(ticketId));
   if(!tk)return;
   document.getElementById('timelineTicketId').textContent='Ticket: '+ticketId;
-  document.getElementById('timelineTicketMeta').textContent='OGI: '+tk.ogi+(tk.custPhone?' · Phone: '+tk.custPhone:'')+(tk.userId?' · User: '+tk.userId:'')+' · '+tk.interactions.length+' interactions · FCR: '+(tk.fcrAchieved?'Pass':'Fail')+' · '+(tk.subVertical||tk.vertical||'');
+  // Fix 10: collect every agent who touched the ticket (incl. Decagon AI), deduped and normalized.
+  const _agents=[];const _seen=new Set();
+  tk.interactions.forEach(i=>{
+    let a=(i.agent||'').trim();
+    if(!a)return;
+    if(/ai[-\s]?decagon|decagon\s*ai/i.test(a))a='Decagon AI'; // normalize 'ai-decagon ai-decagon' etc.
+    if(!_seen.has(a)){_seen.add(a);_agents.push(a);}
+  });
+  const _agentStr=_agents.length?' · Agents: '+_agents.join(', '):'';
+  document.getElementById('timelineTicketMeta').textContent='OGI: '+tk.ogi+(tk.custPhone?' · Phone: '+tk.custPhone:'')+(tk.userId?' · User: '+tk.userId:'')+_agentStr+' · '+tk.interactions.length+' interactions · FCR: '+(tk.fcrAchieved?'Pass':'Fail')+' · '+(tk.subVertical||tk.vertical||'');
   const tsCount={};tk.interactions.forEach(i=>{if(i.parsedDate)tsCount[i.parsedDate]=(tsCount[i.parsedDate]||0)+1;});
   const html=tk.interactions.map((int,idx)=>{
     let dc=CONFIG.INTERNAL.includes(int.type)?'internal':int.type===CONFIG.AI_TYPE?'ai':CONFIG.CUSTOMER_FACING.includes(int.type)?'human':'internal';
@@ -895,7 +945,18 @@ function showTimeline(ticketId){
     return`<div class="tl-item"><div class="tl-dot ${dc}"></div><div class="tl-content"><div class="tl-time">${fmt.datetime(int.createdDate)}</div><div class="tl-type">${int.type}</div>${int.subReason?`<div style="font-size:11px;color:#64748b">${int.subReason}</div>`:''}<div class="tl-flags">${flags.join('')}</div></div></div>`;
   }).join('');
   document.getElementById('timelineBody').innerHTML='<div class="timeline-list">'+html+'</div>';
-  document.getElementById('timelineModal').style.display='flex';
+  // Fix 11: ensure the timeline modal renders ABOVE any modal already open (e.g. defect drill),
+  // so ticket-number click-through never opens behind the list it was launched from.
+  const _tlm=document.getElementById('timelineModal');
+  let _topZ=1000;
+  document.querySelectorAll('[id$="Modal"]').forEach(m=>{
+    if(m!==_tlm&&getComputedStyle(m).display!=='none'){
+      const z=parseInt(getComputedStyle(m).zIndex,10)||0;
+      if(z>=_topZ)_topZ=z+1;
+    }
+  });
+  _tlm.style.zIndex=_topZ;
+  _tlm.style.display='flex';
 }
 
 // ── CEO SUMMARY ──
@@ -1037,7 +1098,7 @@ function buildTrendsTab() {
 
   function buildBuckets(keyFn) {
     const B = {};
-    const ensure = k => { if (!B[k]) B[k]={totalCalls:0,csCalls:0,decCalls:0,decTickets:0,fullHandled:0,escalated:0,fcrMet:0,contained:0,compliant:0,decOnly:0,repCalls:0,repCustomers:0}; };
+    const ensure = k => { if (!B[k]) B[k]={totalCalls:0,csCalls:0,decCalls:0,decTickets:0,fullHandled:0,escalated:0,fcrMet:0,contained:0,compliant:0,decOnly:0,repCalls:0,repCustomers:0,decTicketsCreated:0,decInteractions:0}; };
     for (const tk of allTickets) {
       for (const i of tk.interactions) {
         if (i.type!=='Call'&&i.type!=='AI-Agent Call') continue;
@@ -1054,7 +1115,10 @@ function buildTrendsTab() {
       if (!k) continue;
       ensure(k);
       B[k].decTickets++;
-      if (tk.decagonOnly){B[k].fullHandled++;B[k].decOnly++;B[k].decCalls++;B[k].totalCalls++;}
+      B[k].decCalls++;              // FIX 1: every Decagon ticket = a call handled (fully + escalated), not deflected-only
+      if (tk.aiFirst) B[k].decTicketsCreated++;        // Fix 6: ticket originated by Decagon (AI is first interaction)
+      B[k].decInteractions += tk.aiInteractionCount;   // Fix 7: total AI interactions created by Decagon
+      if (tk.decagonOnly){B[k].fullHandled++;B[k].decOnly++;B[k].totalCalls++;}
       if (tk.csAssisted) B[k].escalated++;
       if (tk.fcrAchieved) B[k].fcrMet++;
       B[k].totalDecTickets = (B[k].totalDecTickets||0) + 1;
@@ -1091,11 +1155,13 @@ function buildTrendsTab() {
     {section:'Call volume'},
     {key:'totalCalls',label:'Total calls handled',color:'#185FA5'},
     {key:'csCalls',label:'Calls handled by CS',color:'#3B6D11',pctOf:'totalCalls'},
-    {key:'decCalls',label:'Calls handled by Decagon',color:'#534AB7',pctOf:'totalCalls'},
+    {key:'decCalls',label:'Total Calls Passed to Decagon',color:'#534AB7',pctOf:'totalCalls'},
     {key:'repCalls',label:'Repeat Decagon contacts',color:'#854F0B',extra:'repCustomers'},
     {section:'Decagon performance'},
-    {key:'fullHandled',label:'Fully handled by Decagon',color:'#639922',pctOf:'decTickets'},
-    {key:'escalated',label:'Escalated to CS by Decagon',color:'#993C1D',pctOf:'decTickets'},
+    {key:'fullHandled',label:'Deflected (Handled by Decagon Alone)',color:'#639922',pctOf:'decTickets'},
+    {key:'escalated',label:'Escalated to CS',color:'#993C1D',pctOf:'decTickets'},
+    {key:'decTicketsCreated',label:'Decagon Tickets Created',color:'#0F6E56'},
+    {key:'decInteractions',label:'Decagon Interactions Created',color:'#7C3AED'},
     {key:'fcrMet',label:'Decagon FCR',color:'#1D9E75',pctOf:'decTickets',isPct:true},
     {key:'contained',label:'Decagon containment rate',color:'#0F6E56',pctOf:'decTickets',isPct:true},
     {key:'compliant',label:'Decagon compliance rate',color:'#7F77DD',pctOf:'decOnly',isPct:true},
@@ -1204,7 +1270,7 @@ function buildTrendsTab() {
     </div>
 `;
 
-    const ICONS2={totalCalls:'fa-phone',csCalls:'fa-headset',decCalls:'fa-robot',repCalls:'fa-rotate',fullHandled:'fa-circle-check',escalated:'fa-person-walking-arrow-right',fcrMet:'fa-bullseye',contained:'fa-shield-halved',compliant:'fa-clipboard-check'};
+    const ICONS2={totalCalls:'fa-phone',csCalls:'fa-headset',decCalls:'fa-robot',repCalls:'fa-rotate',fullHandled:'fa-circle-check',escalated:'fa-person-walking-arrow-right',fcrMet:'fa-bullseye',contained:'fa-shield-halved',compliant:'fa-clipboard-check',decTicketsCreated:'fa-ticket',decInteractions:'fa-comments'};
     var tbl='<div style="overflow-x:auto;border-radius:12px;border:1px solid #cce8e8;box-shadow:0 2px 8px rgba(13,148,136,0.08);background:#fff">';
     tbl+='<table style="width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed">';
     tbl+='<thead><tr style="background:#f0fafa;border-bottom:2px solid #cce8e8">';

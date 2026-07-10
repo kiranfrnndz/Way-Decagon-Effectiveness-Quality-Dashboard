@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.bootstrap5.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=33">
+<link rel="stylesheet" href="style.css?v=34">
 </head>
 <body>
 
@@ -111,8 +111,8 @@
     <div class="tab-panel" id="tab-effectiveness">
       <div class="panel-header"><h2>Decagon Effectiveness</h2><p>Daily trend analysis from first date with data</p></div>
       <div class="charts-grid-2">
-        <div class="chart-card"><div class="chart-hdr">Calls Handled by Decagon <span class="level-tag">Ticket</span><button class="btn-img-export" data-chart="decagonTicketsTrend"><i class="fa-solid fa-image"></i></button></div><canvas id="decagonTicketsTrend"></canvas></div>
-        <div class="chart-card"><div class="chart-hdr">Interactions by Decagon <span class="level-tag int">Interaction</span><button class="btn-img-export" data-chart="decagonIntsTrend"><i class="fa-solid fa-image"></i></button></div><canvas id="decagonIntsTrend"></canvas></div>
+        <div class="chart-card"><div class="chart-hdr">Decagon Outcome: Deflected vs Escalated <span class="level-tag">Ticket</span><button class="btn-img-export" data-chart="decagonTicketsTrend"><i class="fa-solid fa-image"></i></button></div><canvas id="decagonTicketsTrend"></canvas></div>
+        <div class="chart-card"><div class="chart-hdr">Tickets vs Interactions Created by Decagon <span class="level-tag int">Interaction</span><button class="btn-img-export" data-chart="decagonIntsTrend"><i class="fa-solid fa-image"></i></button></div><canvas id="decagonIntsTrend"></canvas></div>
         <div class="chart-card"><div class="chart-hdr">Decagon FCR Trend <span class="level-tag">Ticket</span><button class="btn-img-export" data-chart="fcrTrend"><i class="fa-solid fa-image"></i></button></div><canvas id="fcrTrend"></canvas></div>
         <div class="chart-card"><div class="chart-hdr">CS Assisted & Containment <span class="level-tag">Ticket</span><button class="btn-img-export" data-chart="csAssistedTrend"><i class="fa-solid fa-image"></i></button></div><canvas id="csAssistedTrend"></canvas></div>
       </div>
@@ -211,6 +211,7 @@
         <div class="val-card"><div class="val-label">Total Records Loaded</div><div class="val-num" id="vv-records">—</div></div>
         <div class="val-card"><div class="val-label">Unique OGI Count</div><div class="val-num" id="vv-ogi">—</div></div>
         <div class="val-card"><div class="val-label">Unique Ticket IDs</div><div class="val-num" id="vv-tickets">—</div></div>
+        <div class="val-card"><div class="val-label">Unique Customers</div><div class="val-num" id="vv-customers">—</div></div>
         <div class="val-card"><div class="val-label">Total Interactions</div><div class="val-num" id="vv-interactions">—</div></div>
         <div class="val-card highlight"><div class="val-label">Decagon Handled Interactions</div><div class="val-num" id="vv-ai">—</div></div>
         <div class="val-card"><div class="val-label">Human Interactions</div><div class="val-num" id="vv-human">—</div></div>
@@ -343,6 +344,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="app.js?v=19"></script>
+<script src="app.js?v=20"></script>
 </body>
 </html>
