@@ -634,24 +634,6 @@ function renderEffectivenessCharts(m){
     {label:'CS Assisted',data:csAssistedCounts,backgroundColor:'rgba(239,68,68,0.7)'}
   ]},options:{...base,plugins:{...base.plugins,legend:{display:true,position:'top',labels:{color:text,font:{size:11}}}},scales:{...base.scales,x:{...base.scales?.x,stacked:true,ticks:{color:text,font:{size:10},maxRotation:45},grid:{color:grid}},y:{...base.scales?.y,stacked:true,ticks:{color:text,font:{size:10}},grid:{color:grid},beginAtZero:true}}},plugins:[stackLabelPlugin]});
 
-  dChart('decagonIntsTrend');
-  const stackLabelPlugin2={id:'stackLabels2',afterDatasetsDraw(chart){
-    const ctx=chart.ctx;
-    chart.data.datasets.forEach((ds,di)=>{
-      chart.getDatasetMeta(di).data.forEach((bar,i)=>{
-        const v=ds.data[i];
-        if(!v||v<1)return;
-        ctx.save();ctx.fillStyle='#fff';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-        const y=bar.y+(bar.base-bar.y)/2;
-        if(bar.base-bar.y>14)ctx.fillText(v,bar.x,y);
-        ctx.restore();
-      });
-    });
-  }};
-  STATE.charts.decagonIntsTrend=new Chart(document.getElementById('decagonIntsTrend'),{type:'bar',data:{labels,datasets:[
-    {label:'Tickets Created',data:ticketsCreatedCounts,backgroundColor:'rgba(15,110,86,0.75)'},
-    {label:'Interactions Created',data:interactionsCreatedCounts,backgroundColor:'rgba(124,58,237,0.6)'}
-  ]},options:{...base,plugins:{...base.plugins,legend:{display:true,position:'top',labels:{color:text,font:{size:11}}}},scales:{...base.scales,x:{...base.scales?.x,stacked:false,ticks:{color:text,font:{size:10},maxRotation:45},grid:{color:grid}},y:{...base.scales?.y,stacked:false,ticks:{color:text,font:{size:10}},grid:{color:grid},beginAtZero:true}}},plugins:[stackLabelPlugin2]});
 
   dChart('fcrTrend');
   STATE.charts.fcrTrend=new Chart(document.getElementById('fcrTrend'),{type:'line',data:{labels,datasets:[{label:'Decagon FCR %',data:fcrRates,borderColor:'#059669',backgroundColor:'rgba(5,150,105,0.1)',fill:true,tension:0.4,pointRadius:3}]},options:{...base,scales:{x:{ticks:{color:text,font:{size:10},maxRotation:45},grid:{color:grid}},y:{ticks:{color:text,font:{size:10},callback:v=>v+'%'},grid:{color:grid},beginAtZero:true,max:100}}}});
@@ -1369,7 +1351,7 @@ function exportPDF() {
   const now = new Date().toLocaleDateString('en-GB');
 
   const tabs = ['kpis','effectiveness','compliance','defects','reasons','fcr','recontact','executive','tickets'];
-  const tabLabels = { kpis:'Executive KPIs', effectiveness:'Decagon Effectiveness', compliance:'Decagon Compliance', defects:'System Defects', reasons:'Reason Analysis', fcr:'FCR Analysis', recontact:'Re-contact Analysis','decagon-report':'Decagon Report', executive:'Executive Summary', tickets:'Master Tickets' };
+  const tabLabels = { kpis:'Executive KPIs', effectiveness:'Decagon Effectiveness', compliance:'Decagon Compliance', defects:'System Defects', reasons:'Reason Analysis', fcr:'FCR Analysis', recontact:'Re-contact Analysis',executive:'Executive Summary', tickets:'Master Tickets' };
 
   const originalActive = document.querySelector('.nav-item.active')?.dataset?.tab || 'kpis';
   let pageNum = 0;
@@ -1473,12 +1455,19 @@ function buildFCRTab(){
     });
     const rtDiv=document.getElementById('fcrReasonTable');
     if(rtDiv){
-      const html2=Object.entries(rgMap).sort((a,b)=>(b[1].met+b[1].notMet)-(a[1].met+a[1].notMet)).map(([reason,g])=>{
-        const uid='u'+Math.random().toString(36).slice(2,8);
-        const subs=Object.entries(g.subs).sort((a,b)=>(b[1].met+b[1].notMet)-(a[1].met+a[1].notMet)).map(([sr3,v])=>`<tr class="sr_${uid}" style="display:none;background:#f8fafc"><td style="padding-left:2rem;color:#64748b;font-size:11px">\u21b3 ${sr3}</td><td><span class="fcr-met-badge">${v.met}</span></td><td><span class="fcr-fail-badge">${v.notMet}</span></td><td>${v.met+v.notMet}</td></tr>`).join('');
-        return `<tr style="cursor:pointer;font-weight:500" onclick="this.parentNode.querySelectorAll('.sr_${uid}').forEach(s=>s.style.display=s.style.display==='none'?'':'none');this.querySelector('span.arr').textContent=this.querySelector('span.arr').textContent==='\u25b6'?'\u25bc':'\u25b6'"><td><span class="arr" style="font-size:10px;color:#94a3b8;margin-right:4px">\u25b6</span>${reason} <span style="font-size:10px;color:#94a3b8;font-weight:400">(${Object.keys(g.subs).length})</span></td><td><span class="fcr-met-badge">${g.met}</span></td><td><span class="fcr-fail-badge">${g.notMet}</span></td><td>${g.met+g.notMet}</td></tr>${subs}`;
-      }).join('');
-      rtDiv.innerHTML=`<table class="fcr-reason-table" style="width:100%"><thead><tr><th>Reason (click to expand)</th><th>FCR Met</th><th>Not Met</th><th>Total</th></tr></thead><tbody>${html2}</tbody></table>`;
+      const entries=Object.entries(rgMap).sort((a,b)=>(b[1].met+b[1].notMet)-(a[1].met+a[1].notMet));
+      const opts=entries.map(([reason,g],i)=>`<option value="${i}">${reason} (${g.met+g.notMet})</option>`).join('');
+      const renderSel=(idx)=>{
+        const e=entries[idx]; if(!e){document.getElementById('fcrSubBody').innerHTML='';return;}
+        const g=e[1]; const tot=g.met+g.notMet;
+        document.getElementById('fcrReasonSummary').innerHTML=`<span class="fcr-met-badge">${g.met} Met</span> <span class="fcr-fail-badge">${g.notMet} Not Met</span> <span style="color:#64748b;font-size:12px;margin-left:6px">${tot} total</span>`;
+        const subs=Object.entries(g.subs).sort((a,b)=>(b[1].met+b[1].notMet)-(a[1].met+a[1].notMet)).map(([sr3,v])=>`<tr><td style="color:#475569;font-size:12px">${sr3}</td><td><span class="fcr-met-badge">${v.met}</span></td><td><span class="fcr-fail-badge">${v.notMet}</span></td><td>${v.met+v.notMet}</td></tr>`).join('');
+        document.getElementById('fcrSubBody').innerHTML=subs;
+      };
+      rtDiv.innerHTML=`<div style="margin-bottom:10px"><select id="fcrReasonSelect" class="filter-input" style="width:100%;font-weight:500">${opts}</select></div><div id="fcrReasonSummary" style="margin-bottom:10px"></div><table class="fcr-reason-table" style="width:100%"><thead><tr><th>Sub Reason</th><th>FCR Met</th><th>Not Met</th><th>Total</th></tr></thead><tbody id="fcrSubBody"></tbody></table>`;
+      const sel=document.getElementById('fcrReasonSelect');
+      sel.addEventListener('change',()=>renderSel(+sel.value));
+      renderSel(0);
     }
     if(STATE.fcrDrillTable){try{STATE.fcrDrillTable.destroy();}catch(e){}STATE.fcrDrillTable=null;}
     const statusFilter=document.getElementById('fcrFilterStatus')?.value||'';
@@ -1503,7 +1492,7 @@ function buildFCRTab(){
 }
 
 function setupNav(){
-  const TITLES={upload:'Data Source',kpis:'Executive KPIs',trends:'Trend Analysis',effectiveness:'Decagon Effectiveness',fcr:'FCR Analysis',compliance:'Decagon Compliance',defects:'System Defects',reasons:'Reason Analysis',executive:'Executive Summary',validation:'Data Validation',tickets:'Master Tickets',recontact:'Re-contact Analysis','decagon-report':'Decagon Report'};
+  const TITLES={upload:'Data Source',kpis:'Executive KPIs',trends:'Trend Analysis',effectiveness:'Decagon Effectiveness',fcr:'FCR Analysis',compliance:'Decagon Compliance',defects:'System Defects',reasons:'Reason Analysis',executive:'Executive Summary',validation:'Data Validation',tickets:'Master Tickets',recontact:'Re-contact Analysis'};
   document.querySelectorAll('.nav-item').forEach(item=>{
     item.addEventListener('click',()=>{
       document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
@@ -1511,6 +1500,7 @@ function setupNav(){
       item.classList.add('active');
       const tab=item.dataset.tab;
       document.getElementById('tab-'+tab)?.classList.add('active');
+      const _cd=document.getElementById('compDrillWrap');if(_cd)_cd.style.display='none';
       document.getElementById('topbarTitle').textContent=TITLES[tab]||tab;
       if(tab==='fcr'){if(!STATE.fcrBuilt){buildFCRTab();STATE.fcrBuilt=true;}}
       if(tab==='trends'){buildTrendsTab();}
@@ -1523,122 +1513,11 @@ function setupNav(){
 }
 
 
-// ── DECAGON REPORT ──
-const DR = { crmRows:null, crmFile:null, decRows:null, decFile:null, decSheets:0, result:null, tables:{} };
-function drNormPhone(p){ if(p==null)return null; const s=String(p).replace(/[^\d]/g,''); if(!s)return null; if(s.length===10)return '+1'+s; if(s.length===11&&s[0]==='1')return '+1'+s.slice(1); return '+'+s; }
-function drIsQA(n){ if(!n)return false; if(n.startsWith('+91'))return true; const d=n.replace(/[^\d]/g,''); return d==='14085983338'||d==='4085983338'; }
-async function drReadDecagonWorkbook(file){
-  return new Promise((resolve,reject)=>{ const r=new FileReader();
-    r.onload=e=>{ try{ const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true}); const all=[];
-      wb.SheetNames.forEach(sn=>{ const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:''});
-        rows.forEach(row=>{ all.push({ _sheet:sn, phone:row['Phone Number']||row['Phone']||'', duration:row['Duration']||'',
-          escDefl:String(row['Escalated/Deflected']||'').trim(), csat:row['CSAT']||'', timestamp:row['Timestamp (PDT)']||row['Timestamp']||'',
-          medium:String(row['Medium']||'').trim(), aop:String(row['AOP']||'').trim(), link:row['Conversation Link']||'' }); }); });
-      resolve({rows:all,sheetCount:wb.SheetNames.length}); }catch(err){reject(err);} };
-    r.onerror=()=>reject(new Error('read failed')); r.readAsArrayBuffer(file); });
-}
-function setupDecagonReport(){
-  const dzC=document.getElementById('drDropCRM'), dzD=document.getElementById('drDropDec');
-  const fiC=document.getElementById('drFileCRM'), fiD=document.getElementById('drFileDec'); if(!dzC||!dzD)return;
-  document.getElementById('drBrowseCRM')?.addEventListener('click',e=>{e.stopPropagation();fiC.click();});
-  document.getElementById('drBrowseDec')?.addEventListener('click',e=>{e.stopPropagation();fiD.click();});
-  const bind=(dz,fi,cb)=>{
-    dz.addEventListener('click',e=>{const t=e.target; if(t===dz||t.classList.contains('drop-icon')||t.classList.contains('drop-title')||t.classList.contains('drop-sub')||t.classList.contains('drop-format'))fi.click();});
-    dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag-over');});
-    dz.addEventListener('dragleave',()=>dz.classList.remove('drag-over'));
-    dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('drag-over'); if(e.dataTransfer.files[0])cb(e.dataTransfer.files[0]);});
-    fi.addEventListener('change',e=>{if(e.target.files[0])cb(e.target.files[0]);});
-  };
-  bind(dzC,fiC,drHandleCRM); bind(dzD,fiD,drHandleDec);
-  document.getElementById('drRunBtn').addEventListener('click',drRunReport);
-}
-function drHandleCRM(file){ showToast('Reading CRM…','info'); const done=rows=>{DR.crmRows=rows;DR.crmFile=file.name;drUpdateStatus();showToast('CRM · '+rows.length+' rows','success');};
-  const n=file.name.toLowerCase();
-  if(n.endsWith('.xlsx')||n.endsWith('.xls'))readXLSX(file).then(done).catch(err=>showToast('CRM error: '+err.message,'error'));
-  else Papa.parse(file,{header:true,skipEmptyLines:true,complete:r=>done(r.data),error:err=>showToast('CRM error: '+err.message,'error')});
-}
-function drHandleDec(file){ showToast('Reading Decagon…','info');
-  drReadDecagonWorkbook(file).then(res=>{DR.decRows=res.rows;DR.decFile=file.name;DR.decSheets=res.sheetCount;drUpdateStatus();showToast('Decagon · '+res.sheetCount+' sheets · '+res.rows.length+' rows','success');})
-    .catch(err=>showToast('Decagon error: '+err.message,'error'));
-}
-function drUpdateStatus(){ document.getElementById('drStatus').style.display='block';
-  document.getElementById('drCrmFile').textContent=DR.crmFile||'—';
-  document.getElementById('drCrmRows').textContent=DR.crmRows?DR.crmRows.length.toLocaleString():0;
-  document.getElementById('drDecFile').textContent=DR.decFile||'—';
-  document.getElementById('drDecSheets').textContent=DR.decSheets||0;
-  document.getElementById('drDecRows').textContent=DR.decRows?DR.decRows.length.toLocaleString():0;
-}
-function drRunReport(){
-  if(!DR.decRows){showToast('Load Decagon file first','error');return;}
-  const nonAddr=new Set((document.getElementById('drNonAddr').value||'').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean));
-  const voice=DR.decRows.filter(r=>r.medium.toLowerCase()==='voice');
-  const qaRows=[], realRows=[];
-  voice.forEach(r=>{r._normPhone=drNormPhone(r.phone); if(drIsQA(r._normPhone))qaRows.push(r); else realRows.push(r);});
-  const isDefl=r=>r.escDefl.toLowerCase().includes('deflect'), isEsc=r=>r.escDefl.toLowerCase().includes('escalat');
-  const deflected=realRows.filter(isDefl), escalated=realRows.filter(isEsc);
-  const addressable=realRows.filter(r=>!nonAddr.has(r.aop.toLowerCase())); const addressableDefl=addressable.filter(isDefl);
-  let matched=0, unmatched=0;
-  if(DR.crmRows&&DR.crmRows.length){
-    const sample=DR.crmRows[0]; const phoneCol=Object.keys(sample).find(k=>/phone/i.test(k))||null;
-    const intCol=Object.keys(sample).find(k=>/^interaction$|interaction type/i.test(k))||null;
-    if(phoneCol){ const crmSet=new Set();
-      DR.crmRows.forEach(row=>{ if(intCol){const it=String(row[intCol]||'').trim(); if(it!=='AI-Agent Call'&&it!=='Call')return;}
-        const np=drNormPhone(row[phoneCol]); if(np)crmSet.add(np); });
-      realRows.forEach(r=>{r._crmMatch=!!(r._normPhone&&crmSet.has(r._normPhone)); if(r._crmMatch)matched++; else unmatched++;});
-    }
-  }
-  DR.result={totalVoice:voice.length,qaExcluded:qaRows.length,real:realRows.length,deflected:deflected.length,escalated:escalated.length,
-    addressable:addressable.length,addressableDefl:addressableDefl.length,matched,unmatched,qaRows,realRows,crmLoaded:!!DR.crmRows};
-  drRender();
-}
-function drKpi(label,val,sub,icon,color){ return '<div class="kpi-card kpi-'+color+'"><div class="kpi-icon"><i class="fa-solid '+icon+'"></i></div><div class="kpi-body"><div class="kpi-label">'+label+'</div><div class="kpi-value">'+val+'</div>'+(sub?'<div class="kpi-sub">'+sub+'</div>':'')+'</div></div>'; }
-function drRender(){
-  const r=DR.result; document.getElementById('drResults').style.display='block';
-  const oP=pct(r.deflected,r.real), aP=pct(r.addressableDefl,r.addressable), eP=pct(r.escalated,r.real);
-  const kpis=[
-    drKpi('Total Voice Conversations',fmt.num(r.totalVoice),'From all sheets','fa-phone','blue'),
-    drKpi('QA Excluded',fmt.num(r.qaExcluded),'+91 & 4085983338','fa-shield-halved','muted'),
-    drKpi('Real Customer Calls',fmt.num(r.real),'Voice · QA removed','fa-user','cyan'),
-    drKpi('Deflected',fmt.num(r.deflected),fmt.pct(oP)+' of real','fa-circle-check','green'),
-    drKpi('Escalated',fmt.num(r.escalated),fmt.pct(eP)+' of real','fa-arrow-up-right-from-square','orange'),
-    drKpi('Overall Deflection Rate',fmt.pct(oP),r.deflected+' / '+r.real,'fa-percent','green'),
-    drKpi('Addressable Deflection Rate',fmt.pct(aP),r.addressableDefl+' / '+r.addressable+' addressable','fa-bullseye','teal')
-  ];
-  if(r.crmLoaded){ kpis.push(drKpi('CRM Matched',fmt.num(r.matched),fmt.pct(pct(r.matched,r.real)),'fa-link','purple'));
-    kpis.push(drKpi('CRM Gap',fmt.num(r.unmatched),fmt.pct(pct(r.unmatched,r.real)),'fa-link-slash','red')); }
-  document.getElementById('drKpiGrid').innerHTML=kpis.join('');
-
-  const dateAgg={};
-  r.realRows.forEach(row=>{ const d=row._sheet; if(!dateAgg[d])dateAgg[d]={date:d,total:0,deflected:0,escalated:0}; dateAgg[d].total++;
-    if(row.escDefl.toLowerCase().includes('deflect'))dateAgg[d].deflected++;
-    if(row.escDefl.toLowerCase().includes('escalat'))dateAgg[d].escalated++; });
-  const dateRows=Object.values(dateAgg).sort((a,b)=>a.date.localeCompare(b.date));
-
-  ['_dr_date','_dr_qa','_dr_all'].forEach(k=>{ if(DR.tables[k]){try{DR.tables[k].destroy();}catch(e){} DR.tables[k]=null;} });
-  $('#drDateTable').empty(); $('#drQATable').empty(); $('#drAllTable').empty();
-
-  DR.tables._dr_date=$('#drDateTable').DataTable({
-    data:dateRows.map(d=>[d.date,d.total,d.deflected,d.escalated,pct(d.deflected,d.total).toFixed(1)+'%']),
-    columns:[{title:'Sheet Date'},{title:'Real Calls'},{title:'Deflected'},{title:'Escalated'},{title:'Deflection %'}],
-    pageLength:25, order:[[0,'asc']], dom:'Bfrtip', buttons:['copy','csv'] });
-
-  DR.tables._dr_qa=$('#drQATable').DataTable({
-    data:r.qaRows.map(row=>[row._sheet,String(row.phone),row._normPhone||'—',row.escDefl||'—',row.aop||'—',String(row.timestamp||'—')]),
-    columns:[{title:'Sheet'},{title:'Phone'},{title:'Normalized'},{title:'Esc/Defl'},{title:'AOP'},{title:'Timestamp'}],
-    pageLength:10, dom:'Bfrtip', buttons:['copy','csv'] });
-
-  DR.tables._dr_all=$('#drAllTable').DataTable({
-    data:r.realRows.map(row=>[row._sheet,row._normPhone||String(row.phone),String(row.duration||''),row.escDefl||'—',row.aop||'—',String(row.csat||''),String(row.timestamp||''),
-      r.crmLoaded?(row._crmMatch?'<span style="color:#059669">✓ Matched</span>':'<span style="color:#dc2626">✗ Gap</span>'):'—',
-      row.link?'<a href="'+row.link+'" target="_blank">Open</a>':'—']),
-    columns:[{title:'Date'},{title:'Phone'},{title:'Duration'},{title:'Esc/Defl'},{title:'AOP'},{title:'CSAT'},{title:'Timestamp'},{title:'CRM Match'},{title:'Link'}],
-    pageLength:25, dom:'Bfrtip', buttons:['copy','csv'] });
-}
 
 
 // ── INIT ──
 document.addEventListener('DOMContentLoaded',()=>{
-  setupUpload();setupNav();setupDecagonReport();
+  setupUpload();setupNav();
   document.getElementById('exportPdfBtn').addEventListener('click',exportPDF);
   document.getElementById('exportSummaryBtn').addEventListener('click',exportSummary);
   document.getElementById('applyDateBtn').addEventListener('click',applyDateFilter);

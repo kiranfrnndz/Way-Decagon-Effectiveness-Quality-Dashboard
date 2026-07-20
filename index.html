@@ -33,7 +33,6 @@
     <a class="nav-item" data-tab="validation"><i class="fa-solid fa-shield-check"></i><span>Validation</span></a>
     <a class="nav-item" data-tab="tickets"><i class="fa-solid fa-table"></i><span>Master Tickets</span></a>
     <a class="nav-item" data-tab="recontact"><i class="fa-solid fa-phone-arrow-up-right"></i><span>Re-contact Analysis</span></a>
-    <a class="nav-item" data-tab="decagon-report"><i class="fa-solid fa-robot"></i><span>Decagon Report</span></a>
   </nav>
   <div class="sidebar-footer">v3.2 · Way.com</div>
 </div>
@@ -112,7 +111,6 @@
       <div class="panel-header"><h2>Decagon Effectiveness</h2><p>Daily trend analysis from first date with data</p></div>
       <div class="charts-grid-2">
         <div class="chart-card"><div class="chart-hdr">Decagon Outcome: Deflected vs Escalated <span class="level-tag">Ticket</span><button class="btn-img-export" data-chart="decagonTicketsTrend"><i class="fa-solid fa-image"></i></button></div><canvas id="decagonTicketsTrend"></canvas></div>
-        <div class="chart-card"><div class="chart-hdr">Tickets vs Interactions Created by Decagon <span class="level-tag int">Interaction</span><button class="btn-img-export" data-chart="decagonIntsTrend"><i class="fa-solid fa-image"></i></button></div><canvas id="decagonIntsTrend"></canvas></div>
         <div class="chart-card"><div class="chart-hdr">Decagon FCR Trend <span class="level-tag">Ticket</span><button class="btn-img-export" data-chart="fcrTrend"><i class="fa-solid fa-image"></i></button></div><canvas id="fcrTrend"></canvas></div>
         <div class="chart-card"><div class="chart-hdr">CS Assisted & Containment <span class="level-tag">Ticket</span><button class="btn-img-export" data-chart="csAssistedTrend"><i class="fa-solid fa-image"></i></button></div><canvas id="csAssistedTrend"></canvas></div>
       </div>
@@ -125,7 +123,7 @@
       <div class="fcr-body">
         <div class="fcr-left">
           <div class="chart-card"><div class="chart-hdr">Daily FCR Trend <span class="level-tag">Ticket</span></div><canvas id="fcrTrendChart"></canvas></div>
-          <div class="chart-card" style="margin-top:16px"><div class="chart-hdr">FCR Failure Breakdown <span class="level-tag">Ticket</span></div><canvas id="fcrFailChart"></canvas></div>
+          
         </div>
         <div class="fcr-right">
           <div class="panel-header" style="margin:0 0 8px 0"><h2 style="font-size:15px">Reason / Sub Reason Split</h2><p>FCR Met vs Not Met by contact reason</p></div>
@@ -156,7 +154,6 @@
       <div class="charts-grid-2">
         <div class="chart-card compact-chart"><div class="chart-hdr">Compliance Breakdown</div><div class="pie-wrap"><canvas id="compliancePie"></canvas></div></div>
         <div class="chart-card"><div class="chart-hdr">Missing Fields by Date</div><canvas id="complianceBar"></canvas></div>
-      </div>
       </div>
       <div class="drill-wrap" id="compDrillWrap" style="display:none">
         <div class="drill-hdr"><h4 id="compDrillTitle">Drill-down</h4><button class="btn-close-drill" id="closeCompDrill"><i class="fa-solid fa-xmark"></i></button></div>
@@ -253,48 +250,6 @@
       </div>
     </div>
 
-    <!-- DECAGON REPORT -->
-    <div class="tab-panel" id="tab-decagon-report">
-      <div class="panel-header">
-        <h2>Decagon Report</h2>
-        <p>Upload CS All Tickets + Decagon Conversation Excel · QA excluded: +91 numbers & 4085983338</p>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:1.25rem;">
-        <div class="drop-zone" id="drDropCRM" style="min-height:180px;">
-          <div class="drop-icon"><i class="fa-solid fa-file-excel"></i></div>
-          <div class="drop-title">CS All Tickets (CRM)</div>
-          <div class="drop-sub">Drop file or <span class="drop-link" id="drBrowseCRM">browse</span></div>
-          <div class="drop-format">CSV / XLSX</div>
-          <input type="file" id="drFileCRM" accept=".csv,.xlsx,.xls" style="display:none">
-        </div>
-        <div class="drop-zone" id="drDropDec" style="min-height:180px;">
-          <div class="drop-icon"><i class="fa-solid fa-robot"></i></div>
-          <div class="drop-title">Decagon Conversation Excel</div>
-          <div class="drop-sub">Drop file or <span class="drop-link" id="drBrowseDec">browse</span></div>
-          <div class="drop-format">XLSX · one sheet per date</div>
-          <input type="file" id="drFileDec" accept=".xlsx,.xls" style="display:none">
-        </div>
-      </div>
-      <div id="drStatus" style="display:none;margin-bottom:1rem;padding:0.9rem 1.1rem;background:#f1f5f9;border-radius:8px;font-size:0.9rem;">
-        <div style="margin-bottom:4px;"><b>CRM:</b> <span id="drCrmFile">—</span> · <span id="drCrmRows">0</span> rows</div>
-        <div><b>Decagon:</b> <span id="drDecFile">—</span> · <span id="drDecSheets">0</span> sheets · <span id="drDecRows">0</span> rows</div>
-      </div>
-      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:1.25rem;padding:0.9rem 1.1rem;background:#fefefe;border:1px solid #e2e8f0;border-radius:8px;">
-        <label style="font-weight:600;font-size:0.9rem;">Non-addressable AOPs:</label>
-        <input type="text" id="drNonAddr" style="flex:1;min-width:280px;padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:0.9rem;" placeholder="e.g. Shuttle Status, Directions, Hours">
-        <span style="color:#64748b;font-size:0.82rem;">(comma-separated · used for Addressable Deflection Rate)</span>
-        <button class="btn-export-pdf" id="drRunBtn" style="background:#0d9488;"><i class="fa-solid fa-play"></i> Run Report</button>
-      </div>
-      <div id="drResults" style="display:none;">
-        <div class="kpi-grid" id="drKpiGrid"></div>
-        <div class="section-block" style="margin-top:1.25rem"><h3 class="block-title">Per-Date Breakdown</h3>
-          <div class="table-wrap"><table id="drDateTable" class="display nowrap" style="width:100%"></table></div></div>
-        <div class="section-block" style="margin-top:1.25rem"><h3 class="block-title">QA-Excluded Calls</h3>
-          <div class="table-wrap"><table id="drQATable" class="display nowrap" style="width:100%"></table></div></div>
-        <div class="section-block" style="margin-top:1.25rem"><h3 class="block-title">Real Customer Calls</h3>
-          <div class="table-wrap"><table id="drAllTable" class="display nowrap" style="width:100%"></table></div></div>
-      </div>
-    </div>
 
     <!-- MASTER TICKETS -->
     <div class="tab-panel" id="tab-tickets">
@@ -344,6 +299,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="app.js?v=20"></script>
+<script src="app.js?v=21"></script>
 </body>
 </html>
